@@ -15,7 +15,9 @@ catkin_package(
 #############
 ## Install ##
 #############
-catkin_install_python(PROGRAMS scripts/airo_detection.py
+catkin_install_python(PROGRAMS 
+  scripts/twoD_fruit_detector.py
+  scripts/threeD_fruit_manager.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 

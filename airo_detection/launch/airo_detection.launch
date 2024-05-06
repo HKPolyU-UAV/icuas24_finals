@@ -1,0 +1,7 @@
+<launch>
+    <include file="$(find flivis)/launch/mapping_icuas.launch"/>
+    <node pkg="airo_detection" type="2d_fruit_detector.py" name="twoDFruitDtector" output="screen"/>
+    <node pkg="airo_detection" type="3d_fruit_manager.py" name="threeDFruitManager" output="screen"/>
+    <!-- <node pkg="your_package" type="your_script.py" name="your_node_name" output="screen">
+    </node> -->
+</launch>
