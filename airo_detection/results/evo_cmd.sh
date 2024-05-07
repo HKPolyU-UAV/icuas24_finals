@@ -1,1 +1,0 @@
-evo_ape tum kissicp_tum1.txt gps_tum1.txt -a -p
