@@ -46,13 +46,12 @@ class LidarReprojector:
     def __init__(self):
         # Camera intrinsics and T_cam_lidar
         self.queue_size = 2
-        self.knn_mode_percent = 80
-        # self.knn_dist = 2
+        self.knn_dist = 2
         self.bridge = CvBridge()
-        self.fx = 640.325
+        self.fx = 640.4325
         self.fy = 640.4396
-        self.cx = 320.5857
-        self.cy = 240.9464
+        self.cx = 315.5857
+        self.cy = 225.9464
         self.camera_matrix = np.array([[self.fx, 0, self.cx], [0, self.fy, self.cy], [0, 0, 1]], np.float32)
         self.dist_coeffs = np.zeros((5, 1), np.float32)
         self.R_cam_lidar_z_neg90 =  np.array([[0,1,0],
@@ -73,11 +72,7 @@ class LidarReprojector:
                                             [0.0000000,  1.0000000,  0.0000000],
                                             [0.9799247,  0.0000000, -0.1993679 ]])
 
-        # x:180 y:-11.5
-        self.R_imu_lidar = np.array([[ 0.9799247,  0.0000000, -0.1993679],
-                                [-0.0000000, -1.0000000, -0.0000000],
-                                [-0.1993679,  0.0000000, -0.9799247 ]])
-
+        
 
         self.R_cam_lidar = np.dot(self.R_cam_lidar_z_neg90, self.R_cam_lidar_y_neg101point5)
         # self.R_cam_lidar = np.dot(np.array([[0,1,0], [-1, 0, 0], [0,0.,1]]), np.array([[-0.2419219,  0.0000000, -0.9702957], [0.0000000,  1.0000000,  0.0000000], [0.9702957,  0.0000000, -0.2419219]]))
@@ -98,10 +93,10 @@ class LidarReprojector:
         self.sub_image = message_filters.Subscriber('/camera/color/image_raw/compressed', CompressedImage)
         # self.sub_2dfruit = message_filters.Subscriber('two_d_fruit_keypoints', PointStamped)
         # self.sub_odom = message_filters.Subscriber('/kiss/odometry', Odometry)
-        self.sub_odom = message_filters.Subscriber('/Odometry', Odometry)
+        # self.sub_odom = message_filters.Subscriber('/Odometry', Odometry)
 
         # Synchronize the topics with a slop of 0.1 seconds
-        self.ts = message_filters.ApproximateTimeSynchronizer([self.sub_lidar, self.sub_image, self.sub_odom], 30, 0.055)
+        self.ts = message_filters.ApproximateTimeSynchronizer([self.sub_lidar, self.sub_image], 30, 0.055)
         self.ts.registerCallback(self.callback)
 
          # Create queues for lidar_msg and odom_msg
@@ -109,7 +104,7 @@ class LidarReprojector:
         self.odom_msg_queue = queue.Queue(maxsize=self.queue_size)
 
 
-    def callback(self, lidar_msg, image_msg, odom_msg):
+    def callback(self, lidar_msg, image_msg):
         # Convert ROS PointCloud2 to PCL
          # Check if queues are full
         self.lidar_msg_queue.put(lidar_msg)
@@ -117,30 +112,30 @@ class LidarReprojector:
             # Remove the oldest message (first in)
             self.lidar_msg_queue.get()
 
-        self.odom_msg_queue.put(odom_msg)
-        if self.odom_msg_queue.full():
-            # Remove the oldest message (first in)
-            self.odom_msg_queue.get()
+        # self.odom_msg_queue.put(odom_msg)
+        # if self.odom_msg_queue.full():
+        #     # Remove the oldest message (first in)
+        #     self.odom_msg_queue.get()
 
-        # print(f"sefl.lidar_msg_queue.qsize() {self.lidar_msg_queue.qsize()}")
-        # print("we are inside the callback now")
+        print(f"sefl.lidar_msg_queue.qsize() {self.lidar_msg_queue.qsize()}")
+        print("we are inside the callback now")
 
         try:
             image = self.bridge.compressed_imgmsg_to_cv2(image_msg, "bgr8")
         except CvBridgeError as e:
             print(e)
 
-        rpy_deg = odom_msg_to_rpy(odom_msg)
+        # rpy_deg = odom_msg_to_rpy(odom_msg)
         # print(f"rpy is {rpy_deg}\n")
         # if(abs(rpy_deg[1])<2.5 and abs(rpy_deg[0])<30):
-        if(abs(rpy_deg[1])<3.5):
-            # print(f"GOOD ROLL, PASS-> roll is {rpy_deg[0]}")
-            # print(f"GOOD PITCH, PASS->picth is {rpy_deg[1]}\n")
-            pass
-        else:
-            # print(f"BAD ROLL, RETURN-> roll is {rpy_deg[0]}")
-            # print(f"BAD PITCH, RETURN->picth is {rpy_deg[1]}\n\n\n")
-            return
+        # if(abs(rpy_deg[1])<3.5):
+        #     print(f"GOOD ROLL, PASS-> roll is {rpy_deg[0]}")
+        #     print(f"GOOD PITCH, PASS->picth is {rpy_deg[1]}\n")
+        #     pass
+        # else:
+        #     print(f"BAD ROLL, RETURN-> roll is {rpy_deg[0]}")
+        #     print(f"BAD PITCH, RETURN->picth is {rpy_deg[1]}\n\n\n")
+        #     return
 
         # Reproject points
         # Reproject points
@@ -155,9 +150,6 @@ class LidarReprojector:
 
         uvd_points = self.lidar_points_to_uvd(points_arr)  # YWY noly need uvd
         # self.plot_depth_histagram_with_gaussian(uvd_points, odom_msg)  #
-        # self.twoD_fruit_detector.detect_fruit(image)
-        # image_with_lidar_points = self.colorize_uvd_visualization(uvd_points, image)  #colored_image_points only for visualization, could delete
-        # for fruit_point in self.twoD_fruit_detector.fruit_points_:
         fruit_points = self.twoD_fruit_detector.detect_fruit(image)
         image_with_lidar_points = self.colorize_uvd_visualization(uvd_points, image)  #colored_image_points only for visualization, could delete
         for fruit_point in fruit_points:
@@ -168,47 +160,17 @@ class LidarReprojector:
             # fruit_depth = self.find_fruit_depth(uvd_points, fruit_point)
             # XYZ_yellow = self.transform_utils.uvd_to_world(fruit_point.x, fruit_point.y, fruit_depth, odom_msg)
             
-            fruit_depth = self.find_fruit_depth(uvd_points, fruit_point)
-            # has_valid_depth = False
-            # knn_points = self.find_knn(uvd_points, fruit_point, 3, int(fruit_point.z/3))
-            print(f"has_valid_depth is {fruit_depth}")
-            if(not fruit_depth):
+            has_valid_depth = False
+            has_valid_depth, knn_points = self.find_knn(uvd_points, fruit_point, 3)
+            print(f"has_valid_depth is {has_valid_depth}\n")
+            if(not has_valid_depth):
                 print(f"no valid depth")
-            elif(fruit_depth):
-                print(f"has valid depth")
-                # mode_depth = self.find_mode_depth(knn_points, 80)
-                # fruit_depth = mode_depth
-                # print(f"MODE_DEPTH_MODE_DEPTH_MODE_DEPTH_MODE_DEPTH_MODE_DEPTH_MODE_DEPTH={mode_depth}")
-                XYZ_yellow = self.transform_utils.uvd_to_world(fruit_point.x, fruit_point.y, fruit_depth, odom_msg)
+            elif(has_valid_depth):
+                mode_depth = self.find_mode_depth(knn_points, 80)
                 
-                font = cv2.FONT_HERSHEY_SIMPLEX
-                font_scale = 0.5
-                color_g = (0, 255, 0)  # BGR color for blue
-                color_r = (0, 0, 0)  # BGR color for blue
-                # Position for the text
-                position = (int(fruit_point.x), int(fruit_point.y))  # You can adjust this according to your needs
-
-                # if(fruit_depth > 3 and fruit_depth < 9 and XYZ_yellow[0] > 2 and XYZ_yellow[0]< 8) and XYZ_yellow[2]<0.5 and XYZ_yellow[2]>-2:
-                if(fruit_depth > 1 and fruit_depth < 10):
-                    curr_yellow_id = len(self.fruit_database.fruit_arr_.markers)
-                    print(f"we have============================= {curr_yellow_id} ============================yellow fruits now")
-                    # self.fruit_database.add_fruit_marker('yellow', curr_yellow_id, XYZ_yellow, abs(rpy_ywy[0]))
-                    self.fruit_database.add_fruit_marker('yellow', curr_yellow_id, XYZ_yellow, abs(8), fruit_point.z/2)
-                    self.fruit_database.publish_markers()
-                    cv2.putText(image_with_lidar_points, 'ADD ONE FRUIT', position, font, font_scale, color_g, thickness=2)
-                    # print("BINGO\n")
-                    # print(f"fruit depth is:{fruit_depth}")
-                else:
-                    # print(f"the fruit_depth is {fruit_depth}, discarded\n CHIOBO\n\n")
-                    # Set the font, scale, and color
-                    # Add the text to the image
-                    cv2.putText(image_with_lidar_points, 'this fruit \nis invalid', position, font, font_scale, color_r, thickness=4)
-                    colored_image_msg = self.bridge.cv2_to_imgmsg(image_with_lidar_points, "bgr8")
-                    colored_image_msg.header = odom_msg.header
-                    self.lidar_projected_image_pub.publish(colored_image_msg)
 
         colored_image_msg = self.bridge.cv2_to_imgmsg(image_with_lidar_points, "bgr8")
-        colored_image_msg.header = odom_msg.header
+        colored_image_msg.header = lidar_msg.header
         self.lidar_projected_image_pub.publish(colored_image_msg)
 
 
@@ -324,7 +286,7 @@ class LidarReprojector:
         points_arr = points_arr[points_arr[:, 1] <10]
         points_arr = points_arr[-10< points_arr[:, 1]]
         all_points_arr = np.array(points_arr)
-        # print(f"================all_points_arr.shape: {all_points_arr.shape}")
+        print(f"================all_points_arr.shape: {all_points_arr.shape}")
 
 
         for i in range(0, self.lidar_msg_queue.qsize()-1):
@@ -340,20 +302,20 @@ class LidarReprojector:
 
             # Convert the list to a numpy array
             points_arr = np.array(points_arr)
-            # print(f"================points_arr.shape: {points_arr.shape}")
+            print(f"================points_arr.shape: {points_arr.shape}")
 
 
             # If this is the 5th message, apply the relative transformation
             # if i == 4:
             # rotated_points_arr-> nx3
             rotated_points_arr = np.dot(rot_mat_curr_pre, points_arr.T).T
-            # print(f"================rotated_points_arr.shape: {rotated_points_arr.shape}")
+            print(f"================rotated_points_arr.shape: {rotated_points_arr.shape}")
 
             trans_vec_curr_pre = np.reshape(trans_vec_curr_pre, (3,1))
             # translated_rotated_points_arr = rotated_points_arr.T + trans_vec_curr_pre
             # rotated_points_arr-> nx3
             translated_rotated_points_arr = (rotated_points_arr.T + trans_vec_curr_pre).T
-            # print(f"trans_vec_curr_pre.shape {trans_vec_curr_pre.shape}")
+            print(f"trans_vec_curr_pre.shape {trans_vec_curr_pre.shape}")
             # Append the transformed points to all_points_arr
             if all_points_arr.size == 0:
                 all_points_arr = np.reshape(points_arr, (3,1))
@@ -370,6 +332,8 @@ class LidarReprojector:
         queue_points_arr = all_points_arr
 
         return np.array(queue_points_arr)
+
+
     
     def get_relative_transformation(self, curr_odom_msg, pre_odom_msg):
         # Extract the rotation and translation from the odometry messages
@@ -406,63 +370,54 @@ class LidarReprojector:
 
         return uvd_points
     
-    # 根据fruit_size 调整需要的knn中k的数量
-    
-    # fruit_point 包括 (x,y,size)
-    # 根据 size 判断是否合理
     def find_fruit_depth(self, uvd_points, fruit_point):
         # Calculate the Manhattan distance between each point in uvd_points and fruit_point
-        knn_points = self.find_knn(uvd_points, fruit_point)
-        has_valid_depth = self.check_knn_dist(knn_points, fruit_point)
-        if(not has_valid_depth):
-            fruit_depth = False
-        else:
-            pass
-        fruit_size = fruit_point.z
-        fruit_depth = self.find_mode_depth(knn_points, fruit_size)
-        if(fruit_depth*fruit_size>18 or fruit_depth*fruit_size<10):
-            fruit_depth = False
-        return fruit_depth
-    
-    def check_knn_dist(self, knn_points, fruit_point):
-        distances = np.sqrt((knn_points[:, 0] - fruit_point.x)**2 + (knn_points[:, 1] - fruit_point.y)**2)
-        if(distances[0] > 5):
-            print(f"\ndistance[0] is {distances[0]}, larger than 5, False")
+        distances = np.abs(uvd_points[:, 0] - fruit_point.x) + np.abs(uvd_points[:, 1] - fruit_point.y)
+        # Find the indices of points where distance < 4 pxiels
+        indices = np.where(distances < 5)
+
+        # Select these points
+        selected_points = uvd_points[indices]
+
+        # If no points satisfy the condition, return False
+        if selected_points.size == 0:
+            # print("False")
             return False
         else:
-            return True
-
-
-    def find_knn(self, uvd_points, fruit_point):
+            # Find the point with the minimum distance
+            min_index = np.argmin(distances[indices])
+            min_point = selected_points[min_index]
+            fruit_depth = min_point[2]
+            # if(fruit_depth)
+            # print("Minimum distance point depth: ", min_point)
+            return fruit_depth
+    
+    def find_knn(self, uvd_points, fruit_point, k):
         # Calculate the Euclidean distance between each point in uvd_points and fruit_point
         distances = np.sqrt((uvd_points[:, 0] - fruit_point.x)**2 + (uvd_points[:, 1] - fruit_point.y)**2)
-        fruit_size = int(fruit_point.z/2)
-        print(f"KNN_KNN_KNN_KNN_KNN_KNN_KNN_KNN_KNN_KNN_KNN_KNN_KNN_KNN_KNN")
-        print(f"fruit_size inside find_knn is {fruit_size}")
+        
         # Get the indices of the points sorted by their distances to fruit_point
         sorted_indices = np.argsort(distances)
         nearest_dist = distances[sorted_indices[0]]
-        # nearest_dist_v = abs(uvd_points[sorted_indices[0],1]-fruit_point.y)
-        # print(f"nearest_dist is {nearest_dist_v}")
-        # if nearest_dist > 1:
-        if nearest_dist > 5:
+        nearest_dist_v = abs(uvd_points[sorted_indices[0],1]-fruit_point.y)
+        print(f"nearest_dist is {nearest_dist_v}")
+        # if nearest_dist_v > 1:
+        if nearest_dist > self.knn_dist:
             print("we have returned empty knn_points here")
             has_valid_depth = False
         else:
             has_valid_depth = True
-        #     print(f"set has_valid_depth as {has_valid_depth}")
+            print(f"set has_valid_depth as {has_valid_depth}")
         # Select the top k points
-        # 不同水果大小，需要的 knn 中 k 的数量根据 fruit_size 改变
-        knn_indices = sorted_indices[:(int(fruit_size)+1)]
+        knn_indices = sorted_indices[:k]
         knn_points = uvd_points[knn_indices]
-        knn_points_dist = distances[knn_indices]
-        # knn_points_in_fruit_size = []
-        for i in (0,len(knn_points)-1):
-            # pxiel_dist = abs(uvd_points)
-            print(f"{i}th point is {knn_points[i]}, and pixel dist is {knn_points_dist[i]}")
-        return knn_points
+        print(f"KNN_KNN_KNN_KNN_KNN_KNN_KNN_KNN_KNN_KNN_KNN_KNN_KNN_KNN_KNN")
+        for k_ponit in knn_points:
+            pxiel_dist = abs(uvd_points)
+            print(f"the depth of kth points is {k_ponit[2]}")
+        return has_valid_depth, knn_points
 
-    def find_mode_depth(self, knn_points, fruit_size):
+    def find_mode_depth(self, knn_points, mode_percent):
         # Extract the depth values
         depths = knn_points[:, 2]
 
@@ -479,13 +434,13 @@ class LidarReprojector:
         mode_count = np.count_nonzero(rounded_depths == mode_depth)
 
         # Calculate 80% of the number of points
-        eighty_percent_count = (self.knn_mode_percent/100) * len(depths)
+        eighty_percent_count = (mode_percent/100) * len(depths)
         # Check if the mode count is greater than or equal to 80% of the number of points
         if mode_count >= eighty_percent_count:
-            print(f"mode depth larger than {self.knn_mode_percent}%, mode is {mode_depth}")
+            print(f"mode depth larger than {mode_percent}%, mode is {mode_depth}")
             return mode_depth
         else:
-            print(f"mode depth less than {self.knn_mode_percent}%, discard")
+            print(f"mode depth less than {mode_percent}%, discard")
             return False
 
     def colorize_uvd_visualization(self, uvd_points, image):
@@ -505,7 +460,7 @@ class LidarReprojector:
 
         for x, y, z, b,g,r in np.int32(colored_image_points):
             # print(f"b,g,r:{b},{g},{r}")
-            cv2.circle(image, (x, y), 3, color=(int(b), int(g), int(r)), thickness=1)
+            cv2.circle(image, (x, y), radius=1, color=(int(b), int(g), int(r)), thickness=1)
         
         return image
         # Convert the OpenCV image to ROS Image message
@@ -525,10 +480,10 @@ class LidarReprojector:
         # Draw the bounding box
         cv2.rectangle(image, (x1, y1), (x1+w, y1+h), (0, 255, 0), 2)
         # Add a text label with a background color
-        label = "Yellow42"
+        label = f"size: {size}"
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 0.4
-        thickness = 2
+        thickness = 1
         text_size, _ = cv2.getTextSize(label, font, font_scale, thickness)
         text_x, text_y = x1, y1 - 10
         cv2.rectangle(image, (text_x, text_y - text_size[1]), (text_x + text_size[0], text_y + text_size[1]), (0,255,0), -1)

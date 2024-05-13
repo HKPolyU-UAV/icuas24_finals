@@ -21,10 +21,10 @@ class TransformUtils:
     def __init__(self):
         # Camera intrinsics and T_cam_lidar
         self.bridge = CvBridge()
-        self.fx = 620.4325
+        self.fx = 640.4325
         self.fy = 640.4396
-        self.cx = 315.5857
-        self.cy = 225.9464
+        self.cx = 320.5857
+        self.cy = 240.9464
         self.intrinsic_matrix = np.array([[self.fx, 0, self.cx], [0, self.fy, self.cy], [0, 0, 1]], np.float32)
         # self.intrinsic_matrix = np.array([[381.36, 0, 320.5], [0.0, 381.36, 240.5], [0, 0, 1]])
         self.dist_coeffs = np.zeros((5, 1), np.float32)
@@ -36,8 +36,16 @@ class TransformUtils:
         self.R_cam_lidar_y_neg104 =  np.array([[-0.2419219,  0.0000000, -0.9702957],
                                         [0.0000000,  1.0000000,  0.0000000],
                                         [0.9702957,  0.0000000, -0.2419219] ])
+        self.R_cam_lidar_y_neg101point5 =  np.array([[ -0.1993679,  0.0000000, -0.9799247],
+                                            [0.0000000,  1.0000000,  0.0000000],
+                                            [0.9799247,  0.0000000, -0.1993679 ]])
 
-        self.R_cam_lidar = np.dot(self.R_cam_lidar_z_neg90, self.R_cam_lidar_y_neg104)
+        # x:180 y:-11.5
+        self.R_imu_lidar = np.array([[ 0.9799247,  0.0000000, -0.1993679],
+                                [-0.0000000, -1.0000000, -0.0000000],
+                                [-0.1993679,  0.0000000, -0.9799247 ]])
+
+        self.R_cam_lidar = np.dot(self.R_cam_lidar_z_neg90, self.R_cam_lidar_y_neg101point5)
         
         self.R_lidar_cam = np.linalg.inv(self.R_cam_lidar)
         # self.R_cam_lidar = np.dot(np.array([[0,1,0], [-1, 0, 0], [0,0.,1]]), np.array([[-0.2419219,  0.0000000, -0.9702957], [0.0000000,  1.0000000,  0.0000000], [0.9702957,  0.0000000, -0.2419219]]))
@@ -86,6 +94,19 @@ class TransformUtils:
         XYZ_lidar[0] = XYZ_lidar[0] # - 0.4  # NOTE apply extrinsic 2
         return XYZ_lidar
     
+    def Timu_lidar(self, XYZ_lidar):
+        """
+        将点从lidar坐标系转换到body坐标系
+        参数:
+        XYZ_lidar: 点在相机坐标系下的坐标 (X, Y, Z)
+        rotation_matrix: 从lidar坐标系到body坐标系的旋转矩阵
+        返回:
+        点在body坐标系下的坐标 (X, Y, Z)
+        """
+        # 将点从相机坐标系转换到body坐标系
+        XYZ_imu = np.dot(self.R_imu_lidar, XYZ_lidar)
+        # XYZ_imu [0] = XYZ_lidar[0] # - 0.4  # NOTE apply extrinsic 2
+        return XYZ_imu
     
     def odom_to_transformation_matrix(self, odom_msg):
         # 提取位置和方向
@@ -145,7 +166,8 @@ class TransformUtils:
         """
         XYZ_cam = self.uvd_to_cam_coor(u,v,depth)
         XYZ_lidar = self.Tlidar_cam(XYZ_cam)
-        XYZ_world = self.Tworld_lidar(XYZ_lidar, odom_msg)
+        XYZ_imu = self.Timu_lidar(XYZ_lidar)
+        XYZ_world = self.Tworld_lidar(XYZ_imu, odom_msg)
         # print("XYZ_world is", XYZ_world)
 
         return XYZ_world

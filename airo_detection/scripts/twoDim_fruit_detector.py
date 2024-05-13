@@ -22,7 +22,6 @@ class TwoDFruitDetector:
         # self.image_sub = rospy.Subscriber("camera/color/image_raw/compressed", CompressedImage, self.callback)
         # self.keypoints_pub = rospy.Publisher("two_d_fruit_keypoints", PointStamped, queue_size=10)
         # self.annoted_image_pub = rospy.Publisher('/fused_image', Image, queue_size=10)
-        self.fruit_points_ = []
 
     def detect_fruit_only_mask(self, image):
         self.fruit_points_.clear()
@@ -40,7 +39,8 @@ class TwoDFruitDetector:
         return mask
 
     def detect_fruit(self, image):
-        self.fruit_points_.clear()
+        fruit_points = []
+        fruit_points.clear()
         # try:
         #     cv_image = self.bridge.compressed_imgmsg_to_cv2(image_msg, "bgr8")
         # except cv2.CvBridgeError as e:
@@ -59,22 +59,21 @@ class TwoDFruitDetector:
         # detected_points_arr.header = image_msg.header
         for keypoint in keypoints:
             point = Point()
-            if(abs(keypoint.pt[0]-320) < 150 and 100 < keypoint.pt[1] < 380):
+            if(abs(keypoint.pt[0]-320) < 200 and 30 < keypoint.pt[1] < 350):
                 point.x = keypoint.pt[0]
                 point.y = keypoint.pt[1]
                 point.z = keypoint.size
-                self.fruit_points_.append(point)
+                fruit_points.append(point)
                 # detected_points_arr.points.append(point)
                 # point.header = image_msg.header
                 # self.keypoints_pub.publish(point)
-                print(f"we have pub a 2d fruit at image center the fruit image coor is ({keypoint.pt[0]},{keypoint.pt[1]})")
+                # print(f"we have pub a 2d fruit at image center the fruit image coor is ({keypoint.pt[0]},{keypoint.pt[1]})")
             else:
-                print(f"this fruit at({keypoint.pt[0]},{keypoint.pt[1]}) is NOT qualified")
+                pass
+                # print(f"this fruit at({keypoint.pt[0]},{keypoint.pt[1]}) is NOT qualified")
         # Convert keypoints to the same format as goodFeaturesToTrack
-        keypoints_goodFeaturesToTrack_format = np.array([kp.pt for kp in keypoints]).reshape(-1, 1, 2)
-        keypoints_goodFeaturesToTrack_format_float32 = np.float32(np.round(keypoints_goodFeaturesToTrack_format))
-        print(keypoints_goodFeaturesToTrack_format_float32)
-        return keypoints_goodFeaturesToTrack_format_float32
+        return fruit_points   # 检测水果时用这个
+        # return keypoints_goodFeaturesToTrack_format_float32   # 2D track时用这个
         # self.keypoints_pub.publish(str(keypoints))
 
 
@@ -110,7 +109,7 @@ class TwoDFruitDetector:
         params.minThreshold = 65
         params.maxThreshold = 93
         params.blobColor = 0
-        params.minArea = 8
+        params.minArea = 3
         params.maxArea = 90
         params.filterByCircularity = False
         params.filterByConvexity = False
