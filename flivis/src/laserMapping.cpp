@@ -816,6 +816,8 @@ int main(int argc, char** argv)
             ("/Odometry", 100000);
     ros::Publisher pubPath          = nh.advertise<nav_msgs::Path> 
             ("/path", 100000);
+    ros::Publisher undistort_pub = nh.advertise<sensor_msgs::PointCloud2>("undistored_points", 10000);
+
 //------------------------------------------------------------------------------------------------------
     signal(SIGINT, SigHandle);
     ros::Rate rate(5000);
@@ -844,6 +846,15 @@ int main(int argc, char** argv)
             t0 = omp_get_wtime();
 
             p_imu->Process(Measures, kf, feats_undistort);
+            sensor_msgs::PointCloud2 undistorted_points;
+            pcl::toROSMsg(*feats_undistort, undistorted_points);
+            // Set the header fields of the message
+            undistorted_points.header.stamp = ros::Time().fromSec(lidar_end_time);
+
+            undistorted_points.header.frame_id = "camera_init"; 
+            undistort_pub.publish(undistorted_points);
+
+
             state_point = kf.get_x();
             pos_lid = state_point.pos + state_point.rot * state_point.offset_T_L_I;
 

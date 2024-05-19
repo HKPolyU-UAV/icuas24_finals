@@ -6,7 +6,8 @@
     <rosparam command="load" file="$(find flivis)/config/icuas.yaml" />
 
     <param name="feature_extract_enable" type="bool" value="0"/>
-    <param name="point_filter_num" type="int" value="4"/>
+    <!-- origin is 4 -->
+    <param name="point_filter_num" type="int" value="1"/>
     <param name="max_iteration" type="int" value="3" />
     <param name="filter_size_surf" type="double" value="0.5" />
     <param name="filter_size_map" type="double" value="0.5" />
@@ -21,7 +22,8 @@
     
     <arg name="bag_file" default="/home/allen/icuas24_ws_mini/icuas_final_bags/ICUAS_bag_2.bag"/>
     <!-- <arg name="bag_file" default="/home/kin/bags/ntu_viral/eee_01/eee_01.bag" /> -->
-    <node pkg="rosbag" required="$(arg autorun)" type="play" name="bag_play" args="$(arg bag_file) -s 10 -r 0.250 --clock"/>
+    <node pkg="rosbag" required="$(arg autorun)" type="play" name="bag_play" args="$(arg bag_file) -s 3 -r 0.10 --clock"/>
 
     <node pkg="tf" type="static_transform_publisher" name="w2base" args="0 0 0 -3.14 0 0 world camera_init 1000" />
+    <node pkg="tf" type="static_transform_publisher" name="T_velodyne_world" args="0 0 0 0 0 0 velodyne camera_init 1000" />
 </launch>

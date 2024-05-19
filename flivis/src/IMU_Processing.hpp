@@ -59,6 +59,10 @@ class ImuProcess
   V3D cov_bias_gyr;
   V3D cov_bias_acc;
   double first_lidar_time;
+  // / Create a publisher
+  // ros::init("imu_processing");
+  // ros::NodeHandle nh;
+  // ros::Publisher undistort_pub = nh.advertise<sensor_msgs::PointCloud2>("undistored_points", 1);
 
  private:
   void IMU_init(const MeasureGroup &meas, esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, int &N);
@@ -332,6 +336,16 @@ void ImuProcess::UndistortPcl(const MeasureGroup &meas, esekfom::esekf<state_ikf
       if (it_pcl == pcl_out.points.begin()) break;
     }
   }
+
+  // Convert the pointcloud to a ROS message
+  // sensor_msgs::PointCloud2 undistorted_points;
+  // pcl::toROSMsg(*pcl_out, undistorted_points);
+
+  // // Set the header fields of the message
+  // undistorted_points.header.stamp = v_imu.back()->header.stamp;
+  // undistorted_points.header.frame_id = "camera_init"; 
+  // undistort_pub.publish(undistorted_points);
+
 }
 
 void ImuProcess::Process(const MeasureGroup &meas,  esekfom::esekf<state_ikfom, 12, input_ikfom> &kf_state, PointCloudXYZI::Ptr cur_pcl_un_)
