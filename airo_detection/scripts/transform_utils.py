@@ -214,7 +214,7 @@ class TransformUtils:
         # # 使用 np.concatenate 在矩阵的最后一列添加一列全为1的列
         ones_column = np.ones((XYZ_world.shape[0],1))
         XYZ1_world = np.concatenate((XYZ_world, ones_column), axis=1)
-        print(f"Timu_world4x4:\n{Timu_world4x4}")
+        # print(f"Timu_world4x4:\n{Timu_world4x4}")
 
         XYZ_imu = np.dot(Timu_world4x4, XYZ1_world.T)
         XYZ_imu = XYZ_imu.T
@@ -234,7 +234,7 @@ class TransformUtils:
         # # 使用切片去掉最后一列
         XYZ_imu = XYZ_imu[:, :-1]
 
-        print(f"XYZ_imu:\n{XYZ_imu}")
+        # print(f"XYZ_imu:\n{XYZ_imu}")
 
         return XYZ_imu
     

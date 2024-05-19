@@ -82,11 +82,12 @@ class LidarReprojector:
 
         self.R_cam_lidar = np.dot(self.R_cam_lidar_z_neg90, self.R_cam_lidar_y_neg101point5)
         self.R_lidar_imu = np.linalg.inv(self.R_imu_lidar)
-        self.R_cam_IMU = np.dot(self.R_cam_lidar, self.R_lidar_imu)
+        self.R_cam_imu = np.dot(self.R_cam_lidar, self.R_lidar_imu)
         # self.R_cam_lidar = np.dot(np.array([[0,1,0], [-1, 0, 0], [0,0.,1]]), np.array([[-0.2419219,  0.0000000, -0.9702957], [0.0000000,  1.0000000,  0.0000000], [0.9702957,  0.0000000, -0.2419219]]))
         self.rotvec_cam_lidar_g, _ = cv2.Rodrigues(self.R_cam_lidar)
         self.transvec_cam_lidar_g = np.array([0.0,0.15,-0.1])
-        self.transvec_cam_imu_g = np.array([0.00,-0.12,-0.15])
+        self.transvec_lidar_imu_g = np.array([0.0,0.15,-0.25])
+        self.transvec_cam_imu_g = np.array([-0.07,0.0,-0.15])
         self.lidar_projected_image_pub = rospy.Publisher('/fused_image_ooad', Image, queue_size=10)
 
         self.fruit_database = PlantFruitDatabase()
@@ -443,8 +444,8 @@ class LidarReprojector:
             print(f"fruit_depth*fruit_size>40, return false")
             fruit_depth = False
 
-        if((fruit_depth*fruit_size)<15):
-            print(f"fruit_depth*fruit_size<15, return false")
+        if((fruit_depth*fruit_size)<17):
+            print(f"fruit_depth*fruit_size<17, return false")
             fruit_depth = False
 
         d3size = fruit_size*(fruit_depth**3)
@@ -492,7 +493,7 @@ class LidarReprojector:
         #     print(f"set has_valid_depth as {has_valid_depth}")
         # Select the top k points
         # 不同水果大小，需要的 knn 中 k 的数量根据 fruit_size 改变
-        knn_indices = sorted_indices[:(int(fruit_size)+2)]
+        knn_indices = sorted_indices[:(int(fruit_size)+4)]
         knn_points = uvd_points[knn_indices]
         knn_points_dist = distances[knn_indices]
         # knn_points_in_fruit_size = []
@@ -500,7 +501,7 @@ class LidarReprojector:
         print(f"the fruit_point is at ({fruit_point.x:.2f},{fruit_point.y:.2f}), fruit_size is {fruit_point.z:.2f}")
         for i in range(0,len(knn_points)-1):
             pxiel_dist = abs(uvd_points)
-            # print(f"{i}th point is {knn_points[i]}, and pixel dist is {knn_points_dist[i]:.2f}")
+            print(f"{i}th point is {knn_points[i]}, and pixel dist is {knn_points_dist[i]:.2f}")
 
 
         return knn_points
@@ -590,11 +591,11 @@ class LidarReprojector:
             print(f"marker poistion is ({new_fruit})")
             # Append the marker's position to the list
             worldXYZ_fruit = np.append(worldXYZ_fruit, [new_fruit], axis=0)
-        print(f"worldXYZ_fruit is:\n{worldXYZ_fruit}")
+        # print(f"worldXYZ_fruit is:\n{worldXYZ_fruit}")
         imuXYZ_fruits = self.transform_utils.Timu_world(worldXYZ_fruit, odom_msg)
         rotated_lidarXYZ_fruits = np.dot(self.R_lidar_imu, imuXYZ_fruits.T)
-        translated_rotated_lidarXYZ_fruits = rotated_lidarXYZ_fruits.T + self.transvec_cam_imu_g
-        print(f"translated_rotated_lidarXYZ_fruits is:\n{translated_rotated_lidarXYZ_fruits}")
+        translated_rotated_lidarXYZ_fruits = rotated_lidarXYZ_fruits.T + self.transvec_lidar_imu_g
+        # print(f"translated_rotated_lidarXYZ_fruits is:\n{translated_rotated_lidarXYZ_fruits}")
         # homo_fruits = np.dot(self.camera_matrix, translated_rotated_lidarXYZ_fruits.T).T
         # uvd_fruits = homo_fruits[:, :3] / homo_fruits[:, 2, np.newaxis]
         # uvd_fruits[:,2] = homo_fruits[:,2]
