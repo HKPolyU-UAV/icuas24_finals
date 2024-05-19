@@ -32,7 +32,7 @@ class PlantFruitDatabase:
 
         self.green_dist = 1.0
         self.red_dist = 0.18
-        self.yellow_dist = 1.5
+        self.yellow_dist = 1.1
 
     def add_fruit_marker(self, fruit_color, fruit_id, position, rpy_roll, two_d_size):
         print("add_fruit_marker() called")
@@ -64,11 +64,14 @@ class PlantFruitDatabase:
         for old_marker in self.fruit_arr_.markers:
             dist = calc_marker_dist(old_marker, marker)
             if (dist <= self.yellow_dist and fruit_color == "yellow"):
-                # print("duplicate fruit by 3D dist, IIR and return")
+                print("duplicate fruit by 3D dist, IIR and return")
                 old_marker.pose.position.x = (rpy_roll*old_marker.pose.position.x + marker.pose.position.x)/(rpy_roll+1)
                 old_marker.pose.position.y = (rpy_roll*old_marker.pose.position.y + marker.pose.position.y)/(rpy_roll+1)
                 old_marker.pose.position.z = (rpy_roll*old_marker.pose.position.z + marker.pose.position.z)/(rpy_roll+1)
                 old_marker.color.a = old_marker.color.a + 0.5
+                old_marker.scale.x = (3*old_marker.scale.x + yellow_size)/4
+                old_marker.scale.y = (3*old_marker.scale.y + yellow_size)/4
+                old_marker.scale.z = (3*old_marker.scale.z + yellow_size)/4
                 return
             if (dist <= self.red_dist and fruit_color == "red"):
                 print("duplicate fruit by 3D dist, IIR and return")

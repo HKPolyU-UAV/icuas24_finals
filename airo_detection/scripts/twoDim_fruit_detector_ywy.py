@@ -97,8 +97,12 @@ class TwoDFruitDetector:
     
     def clahed_hsv_fruit_mask(self, clahed_hsv_image):
         # manually tuned by YWY
-        lower_yellow = np.array([0, 60, 255])
-        upper_yellow = np.array([80, 255, 255])
+        # yellow
+        lower_yellow = np.array([15, 42, 255])
+        upper_yellow = np.array([77, 255, 255])
+        # red
+        # lower_yellow = np.array([185, 115, 25])
+        # upper_yellow = np.array([255, 255, 255])
         mask = cv2.inRange(clahed_hsv_image, lower_yellow, upper_yellow)
         # Bitwise-AND mask and original image
         res = cv2.bitwise_and(clahed_hsv_image, clahed_hsv_image, mask=mask)
@@ -112,8 +116,8 @@ class TwoDFruitDetector:
         params.minThreshold = 65
         params.maxThreshold = 93
         params.blobColor = 0
-        params.minArea = 3
-        params.maxArea = 90
+        params.minArea = 12
+        params.maxArea = 500
         params.filterByCircularity = False
         params.filterByConvexity = False
         params.minCircularity =.4

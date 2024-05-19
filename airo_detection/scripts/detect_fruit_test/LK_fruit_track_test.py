@@ -46,6 +46,14 @@ def extract_number(filename):
     number = float(name_without_extension)
     return number
 
+def fruit_points2goodfeature_format(fruit_points):
+    keypoints_goodFeaturesToTrack_format = np.array([[kp.x, kp.y] for kp in fruit_points]).reshape(-1, 1, 2)
+    keypoints_goodFeaturesToTrack_format_float32 = np.float32(np.round(keypoints_goodFeaturesToTrack_format))
+    print(keypoints_goodFeaturesToTrack_format_float32)
+    return keypoints_goodFeaturesToTrack_format_float32
+
+    
+
 # Sort the files by the numeric part of the filename
 file_list.sort(key=extract_number)
 # file_list.sort(key=os.path.getmtime)
@@ -56,30 +64,38 @@ bridge = CvBridge()
 # old_frame_msg = bridge.cv2_to_imgmsg(old_frame, "bgr8")
 old_gray = cv2.cvtColor(old_frame, cv2.COLOR_BGR2GRAY)
 
-p0 = cv2.goodFeaturesToTrack(old_gray, mask=None, **feature_params)
-p_fruit0 = twoD_fruit_detector.detect_fruit(old_frame)
+# def detect_fruit_point_to_good_feature_format(fruit_points_ywy):
+#     good_feature_fruit_points= np.array()
+#     for fruit_point in fruit_points_ywy:
 
+
+
+p0 = cv2.goodFeaturesToTrack(old_gray, mask=None, **feature_params)
+p_fruit0_class = twoD_fruit_detector.detect_fruit(old_frame)
+p_fruit0 = fruit_points2goodfeature_format(p_fruit0_class)
 # Iterate over each file in the directory
 for i in range(1, len(file_list)):
     frame = cv2.imread(file_list[i])
     print(f"file_list[{i}]: {file_list[i]}")
     frame_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     p1 = cv2.goodFeaturesToTrack(frame_gray, mask=None, **feature_params)
-    # print(f"p1: {p1}")
-    p_fruit1 = twoD_fruit_detector.detect_fruit(frame)
+    print(f"p1: {p1}")
+    p_fruit1_class = twoD_fruit_detector.detect_fruit(frame)
+    p_fruit1 = fruit_points2goodfeature_format(p_fruit1_class)
+
     # for fruit in p_fruit1:
     #     frame = cv2.circle(frame, (int(fruit[0][0]),int(fruit[0][1])), radius = 3, color=(0,255,255), thickness=1)
 
     # print(f"p_fruit1.shape is {p_fruit1.shape}")
-    # print(f"p_fruit1 is {p_fruit1}")
+    print(f"p_fruit1 is {p_fruit1}")
     # calculate optical flow
-    p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, frame_gray, p0, p1, **lk_params)
-    good_new = p1[st == 1]
-    good_old = p0[st == 1]
+    # p1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, frame_gray, p0, p1, **lk_params)
+    # good_new = p1[st == 1]
+    # good_old = p0[st == 1]
 
-    # p_fruit1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, frame_gray, p_fruit0, p_fruit1, **lk_params)
-    # good_new = p_fruit1[st == 1]
-    # good_old = p_fruit0[st == 1]
+    p_fruit1, st, err = cv2.calcOpticalFlowPyrLK(old_gray, frame_gray, p_fruit0, p_fruit1, **lk_params)
+    good_new = p_fruit1[st == 1]
+    good_old = p_fruit0[st == 1]
 
     # for fruit in p_fruit1:
     #     frame = cv2.circle(frame, (int(fruit[0][0]),int(fruit[0][1])), radius = 2, color=(0,255,0), thickness=3)

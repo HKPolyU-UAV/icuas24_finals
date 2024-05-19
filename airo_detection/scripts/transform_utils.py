@@ -21,10 +21,10 @@ class TransformUtils:
     def __init__(self):
         # Camera intrinsics and T_cam_lidar
         self.bridge = CvBridge()
-        self.fx = 640.4325
-        self.fy = 640.4396
+        self.fx = 624.4325
+        self.fy = 624.4396
         self.cx = 320.5857
-        self.cy = 240.9464
+        self.cy = 219.9464
         self.intrinsic_matrix = np.array([[self.fx, 0, self.cx], [0, self.fy, self.cy], [0, 0, 1]], np.float32)
         # self.intrinsic_matrix = np.array([[381.36, 0, 320.5], [0.0, 381.36, 240.5], [0, 0, 1]])
         self.dist_coeffs = np.zeros((5, 1), np.float32)
@@ -46,11 +46,13 @@ class TransformUtils:
                                 [-0.1993679,  0.0000000, -0.9799247 ]])
 
         self.R_cam_lidar = np.dot(self.R_cam_lidar_z_neg90, self.R_cam_lidar_y_neg101point5)
-        
+        self.R_lidar_imu = np.linalg.inv(self.R_imu_lidar)
+        self.R_cam_IMU = np.dot(self.R_cam_lidar, self.R_lidar_imu)
+
         self.R_lidar_cam = np.linalg.inv(self.R_cam_lidar)
         # self.R_cam_lidar = np.dot(np.array([[0,1,0], [-1, 0, 0], [0,0.,1]]), np.array([[-0.2419219,  0.0000000, -0.9702957], [0.0000000,  1.0000000,  0.0000000], [0.9702957,  0.0000000, -0.2419219]]))
         self.rotvec_cam_lidar_g, _ = cv2.Rodrigues(self.R_cam_lidar)
-        self.transvec_cam_lidar_g = np.array([0.1,0,-0.1])
+        self.transvec_cam_lidar_g = np.array([0.0,0.15,-0.1])
 
     def uvd_to_cam_coor(self, u, v, depth):
         """
@@ -151,7 +153,6 @@ class TransformUtils:
         XYZ_world = point_in_world_coords_hom[:3] / point_in_world_coords_hom[3]
         return XYZ_world
     
-
     def uvd_to_world(self, u, v, depth, odom_msg):
         """
         计算物体在相机坐标系下的坐标
@@ -172,21 +173,121 @@ class TransformUtils:
 
         return XYZ_world
     
-    def world_to_uv(self, XYZ_world_marker):
-        # 将3D点从世界坐标系转换到相机坐标系
-        XYZ_world = [0,0,0]
-        XYZ_world[0] = XYZ_world_marker.pose.position.x
-        XYZ_world[1] = XYZ_world_marker.pose.position.y
-        XYZ_world[2] = XYZ_world_marker.pose.position.z
-        XYZ_body = self.Tbody_world(XYZ_world)            
-        # 将3D点从相机坐标系投影到图像平面
-        XYZ_cam = self.Tcam_body(XYZ_body)
-        u,v = self.cam_coor_to_uv(XYZ_cam)
-        if(abs(XYZ_body[0]+XYZ_body[1]+XYZ_body[2])>5):
-            # 如果到body系距离太远，让u,v 不能接受
-            u = -1000
-            v = -1000
-        return u, v
+    # def world_to_uv(self, XYZ_world_marker):
+    #     # 将3D点从世界坐标系转换到相机坐标系
+    #     XYZ_world = [0,0,0]
+    #     XYZ_world[0] = XYZ_world_marker.pose.position.x
+    #     XYZ_world[1] = XYZ_world_marker.pose.position.y
+    #     XYZ_world[2] = XYZ_world_marker.pose.position.z
+    #     XYZ_body = self.Tlidar_world(XYZ_world)            
+    #     # 将3D点从相机坐标系投影到图像平面
+    #     XYZ_cam = self.T_cam_body(XYZ_body)
+    #     u,v = self.cam_coor_to_uv(XYZ_cam)
+    #     if(abs(XYZ_body[0]+XYZ_body[1]+XYZ_body[2])>5):
+    #         # 如果到body系距离太远，让u,v 不能接受
+    #         u = -1000
+    #         v = -1000
+    #     return u, v
+    
+    def Timu_world(self, XYZ_world, odom_msg):
+        """
+        将点从world坐标系转换到body坐标系
+        参数:
+        point_in_world_frame: 点在世界坐标系下的坐标 (X, Y, Z)
+        transform_matrix: 从 self.odom 中获得
+
+        返回:
+        点在body坐标系下的坐标 (X, Y, Z)
+        """
+        # 从 world coor to body coor
+        # 从odometry消息中获取旋转矩阵和平移向量
+        # 将点转换为齐次坐标        
+        position = odom_msg.pose.pose.position
+        Tworld_lidar = self.odom_to_rotation_matrix(odom_msg)
+        Timu_world4x4 = np.linalg.inv(Tworld_lidar)
+        # print(f"Rlidar_world4x4:\n{Timu_world4x4}")
+       # 设置平移部分
+        Timu_world4x4[0, 3] = -position.x
+        Timu_world4x4[1, 3] = -position.y
+        Timu_world4x4[2, 3] = -position.z
+
+        # # 使用 np.concatenate 在矩阵的最后一列添加一列全为1的列
+        ones_column = np.ones((XYZ_world.shape[0],1))
+        XYZ1_world = np.concatenate((XYZ_world, ones_column), axis=1)
+        print(f"Timu_world4x4:\n{Timu_world4x4}")
+
+        XYZ_imu = np.dot(Timu_world4x4, XYZ1_world.T)
+        XYZ_imu = XYZ_imu.T
+        # # 将第一行减去number_to_subtract
+        # XYZ_lidar[0] = XYZ_lidar_no_trans[0] - trans_x
+        # XYZ_lidar = XYZ_lidar_no_trans[1] - trans_y
+        # XYZ_lidar = XYZ_lidar_no_trans[2] - trans_z
+        # XYZ_lidar = XYZ_lidar.T
+
+
+        # # 使用逆变换矩阵进行坐标变换
+        # point_in_body_coords_hom_T = np.dot(inv_transformation_matrix, XYZ1_world.T)
+        # print(f"point_in_body_coords_hom_T:\n{point_in_body_coords_hom_T}")
+        # point_in_body_coords_hom = point_in_body_coords_hom_T.T
+        # print(f"point_in_body_coords_hom:\n{point_in_body_coords_hom}")
+        # # 将结果转换回非齐次坐标
+        # # 使用切片去掉最后一列
+        XYZ_imu = XYZ_imu[:, :-1]
+
+        print(f"XYZ_imu:\n{XYZ_imu}")
+
+        return XYZ_imu
+    
+    def odom_to_rotation_matrix(self, odom_msg):
+        # 提取位置和方向
+        orientation = odom_msg.pose.pose.orientation
+
+        # 创建3x3变换矩阵
+        transformation_matrix = np.eye(4)
+
+        # 设置旋转部分
+        quaternion = [orientation.x, orientation.y, orientation.z, orientation.w]
+        rotation_matrix = tf_trans.quaternion_matrix(quaternion)
+
+        return rotation_matrix
+
+    def Tbody_world(self, XYZ_world):
+        """
+        将点从 world 系转换到 body 坐标系
+        参数:
+        XYZ_world: 点在世界坐标系下的坐标 (X, Y, Z)
+        transform_matrix: 从 self.odom 中获得
+
+        返回:
+        点在world坐标系下的坐标 (X, Y, Z)
+        """
+        # 从 body coor to world coor
+        # 从odometry消息中获取旋转矩阵和平移向量
+        # 将点转换为齐次坐标
+        transformation_matrix = self.odom_to_transformation_matrix()
+        XYZ1_world = np.append(XYZ_world, 1)
+        # 使用变换矩阵进行坐标变换
+        point_in_body_coords_hom = np.dot(np.linalg.inv(transformation_matrix), XYZ1_world)
+
+        # 将结果转换回非齐次坐标
+        XYZ_body = point_in_body_coords_hom[:3] / point_in_body_coords_hom[3]
+        return XYZ_body
+    
+    def Tcam_body(self, XYZ_body):
+        """
+        将点从 body 坐标系 转换到 cam 坐标系
+        参数:
+        XYZ_body: 点在相机坐标系下的坐标 (X, Y, Z)
+        rotation_matrix: 从相机坐标系到body坐标系的旋转矩阵
+        [0, 0, 1
+        -1, 0, 0
+         0, -1, 0]
+        返回:
+        点在body坐标系下的坐标 (X, Y, Z)
+        """
+        # 将点从相机坐标系转换到body坐标系
+        XYZ_cam = np.dot(np.linalg.inv(self.R_body_cam), XYZ_body)
+        return XYZ_cam
     
     def DetectCallback(self, rgb_msg, depth_msg, odom_msg):
         try:
