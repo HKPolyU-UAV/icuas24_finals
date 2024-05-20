@@ -16,6 +16,7 @@ from scipy.stats import norm
 import tf.transformations as tf_trans
 from scipy.spatial import distance
 import queue
+from ultralytics import YOLO
 
 
 
@@ -28,6 +29,7 @@ from threeDim_fruit_database import *
 from twoDim_fruit_detector_ywy import TwoDFruitDetector
 # from twoDim_fruit_detector import TwoDFruitDetector
 from transform_utils import *
+from yolo_detect import *
 import tf
 
 def quaternion_to_rotation_matrix(quat):
@@ -93,6 +95,8 @@ class LidarReprojector:
         self.fruit_database = PlantFruitDatabase()
         self.transform_utils = TransformUtils()
         self.twoD_fruit_detector = TwoDFruitDetector()
+        self.yolo_model = YOLO("/home/allen/icuas24_ws_mini/src/airo_detection/scripts/detect_fruit_test/demo_data/last.pt")
+
 
         # ROS node and subscriber
         rospy.init_node('lidar_reprojector', anonymous=True)
@@ -156,6 +160,8 @@ class LidarReprojector:
         # for fruit_point in self.twoD_fruit_detector.fruit_points_:
         fruit_points = self.twoD_fruit_detector.detect_fruit(image)
 
+        yolo_fruit_points = yolo_detect(image, self.yolo_model)
+
         if(len(self.fruit_database.fruit_arr_.markers)>0):
             print(f"draw a new fruit_arr_ on a new image ===============================================")
             uvd_fruits = self.fruit_markers_to_uvd(odom_msg)
@@ -168,15 +174,19 @@ class LidarReprojector:
             print(f"image_mean_depth is {image_mean_depth}, we should do gaussian fitting here")
         else:
             print(f"image_mean_depth is {image_mean_depth}, no gaussian fitting")
-        for fruit_point in fruit_points:
+        
+        # for fruit_point in fruit_points:
+        for fruit_point in yolo_fruit_points:
+            print(f"fruit is at ({int(fruit_point.x)},{int(fruit_point.y)}, {int(fruit_point.z)})")
         # fruit_point = PointStamped()
             # fruit_point = two_d_fruit_keypoints_msg.point
             image = self.draw_bbx(image, int(fruit_point.x),int(fruit_point.y), int(fruit_point.z))
 
-            # fruit_depth = self.find_fruit_depth(uvd_points, fruit_point)
+            fruit_point.z = fruit_point.z/2
+            fruit_depth = self.find_fruit_depth(uvd_points, fruit_point)
+            # fruit_depth = self.find_yolo_fruit_depth(float(fruit_point.z))
             # XYZ_yellow = self.transform_utils.uvd_to_world(fruit_point.x, fruit_point.y, fruit_depth, odom_msg)
             
-            fruit_depth = self.find_fruit_depth(uvd_points, fruit_point)
             # has_valid_depth = False
             # knn_points = self.find_knn(uvd_points, fruit_point, 3, int(fruit_point.z/3))
             print(f"has_valid_depth is {fruit_depth}")
@@ -412,6 +422,10 @@ class LidarReprojector:
     
     
     # 根据fruit_size 调整需要的knn中k的数量
+
+    def find_yolo_fruit_depth(self, fruit_size):
+        yolo_fruit_depth = 400/(fruit_size**2)
+        return yolo_fruit_depth
     
     # fruit_point 包括 (x,y,size)
     # 根据 size 判断是否合理
