@@ -12,7 +12,7 @@ print(f"before we load the model and the image\n\n")
 # Load a pretrained YOLO model (recommended for training)
 # Load a pretrained YOLO model (recommended for training)/home/allen/icuas24_ws_mini/src/airo_detection/scripts/last_yolo.pt
 
-model = YOLO("/home/allen/icuas24_ws_mini/src/airo_detection/scripts/detect_fruit_test/demo_data/last.pt")
+# model = YOLO("/home/allen/icuas24_ws_mini/src/airo_detection/scripts/detect_fruit_test/demo_data/last.pt")
 
 
 # Load the image
