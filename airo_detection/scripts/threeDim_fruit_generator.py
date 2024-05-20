@@ -442,10 +442,11 @@ class LidarReprojector:
         knn_points = self.find_knn(uvd_points, fruit_point)
         
         fruit_size = fruit_point.z
-        weighted_depth, depth_mean, depth_var = self.find_depth_mean_var(knn_points, fruit_point)
+        knn_points_noOutlier = self.remove_outliers(knn_points)
+        weighted_depth, depth_mean, depth_var = self.find_depth_mean_var(knn_points_noOutlier, fruit_point)
         print(f"mean of depth is: {depth_mean};\nVariance of depth is: {depth_var}")
         print(f"mean of weighted_depth is: {weighted_depth};\nVariance of depth is: {depth_var}")
-        if((depth_var/fruit_size) > 0.3):
+        if((depth_var/fruit_size) > 0.33):
             print(f"the dpeth_var is {depth_var}/{fruit_size} = {depth_var/fruit_size}, TOO LARGE, return")
             return False
         else:
@@ -453,7 +454,7 @@ class LidarReprojector:
             fruit_depth = weighted_depth
             print(f"valid_var, the fruit_depth is set as {weighted_depth}")
         
-        has_valid_depth = self.check_knn_dist(knn_points, fruit_point)
+        has_valid_depth = self.check_knn_dist(knn_points_noOutlier, fruit_point)
         if(not has_valid_depth):
             fruit_depth = False
             return
@@ -464,12 +465,12 @@ class LidarReprojector:
         # if(fruit_depth*fruit_size>10 or fruit_depth/fruit_size<0.5):
         # sol 2: 乘法
         # dist2size
-        if((fruit_depth*fruit_size)>60):
-            print(f"fruit_depth*fruit_size>60, return false")
+        if((fruit_depth*fruit_size)>75):
+            print(f"fruit_depth*fruit_size>75, return false")
             fruit_depth = False
 
-        if((fruit_depth*fruit_size)<45):
-            print(f"fruit_depth*fruit_size<45, return false")
+        if((fruit_depth*fruit_size)<50):
+            print(f"fruit_depth*fruit_size<50, return false")
             fruit_depth = False
 
         d3size = fruit_size*(fruit_depth**3)
@@ -529,6 +530,26 @@ class LidarReprojector:
 
 
         return knn_points
+    
+    def remove_outliers(self, knn_points):
+        # Extract the third element from each point
+        print(f"inside remove_outliers")
+        third_elements = [point[2] for point in knn_points]
+
+        # Calculate the IQR of the third elements
+        q1 = np.percentile(third_elements, 25)
+        q3 = np.percentile(third_elements, 75)
+        iqr = q3 - q1
+
+        # Identify the outlier indices
+        outlier_indices = [i for i, x in enumerate(third_elements) if x < (q1 - 1.5 * iqr) or x > (q3 + 1.5 * iqr)]
+
+        # Remove the outliers from the points
+        knn_points_without_outliers = [point for i, point in enumerate(knn_points) if i not in outlier_indices]
+
+        knn_points_without_outliers = np.array(knn_points_without_outliers)
+        print(f"knn_points_without_outliers :{knn_points_without_outliers}")
+        return knn_points_without_outliers
 
     def weighted_mean(self, knn_points, pixel_distances):
         weights = [1 / dist for dist in pixel_distances]
