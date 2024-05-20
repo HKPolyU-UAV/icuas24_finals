@@ -17,7 +17,6 @@ catkin_package(
 #############
 catkin_install_python(PROGRAMS 
   scripts/threeDim_fruit_generator.py
-  scripts/threeDim_fruit_generator_registered_points.py
   DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
