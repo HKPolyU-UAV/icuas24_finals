@@ -40,7 +40,13 @@ class PlantFruitDatabase:
         marker.header.frame_id = "camera_init"
         marker.type = marker.SPHERE
         marker.action = marker.ADD
-        yellow_size = two_d_size/5
+        if(two_d_size > 16):
+            print(f"we got a very large fruit with size {two_d_size}")
+            print(f"we got a very large fruit with size {two_d_size}")
+            print(f"we got a very large fruit with size {two_d_size}")
+            print(f"we got a very large fruit with size {two_d_size}")
+            print(f"we got a very large fruit with size {two_d_size}")
+        yellow_size = two_d_size/10
         marker.scale.x = yellow_size
         marker.scale.y = yellow_size
         marker.scale.z = yellow_size

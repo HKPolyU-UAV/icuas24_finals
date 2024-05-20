@@ -42,8 +42,8 @@ def yolo_detect(image, model):
             if(class_name == "yellow"):
                 print("inside")
                 point = Point()
-                point.x = float(xywh[0] + xywh[2]/2)
-                point.y = float(xywh[1] + xywh[3]/2)
+                point.x = float(xywh[0])
+                point.y = float(xywh[1])
                 point.z = float((xywh[2]+xywh[3])/2)
                 yolo_fruit_points.append(point)
                 
