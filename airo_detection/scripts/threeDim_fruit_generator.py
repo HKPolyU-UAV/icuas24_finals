@@ -2,7 +2,7 @@ import rospy
 import cv2
 import numpy as np
 from sensor_msgs import point_cloud2
-from sensor_msgs.msg import PointCloud2
+from sensor_msgs.msg import PointCloud2, PointField
 from sensor_msgs.msg import Image, PointCloud2, CompressedImage
 from geometry_msgs.msg import Point, PointStamped
 from cv_bridge import CvBridge, CvBridgeError
@@ -17,7 +17,7 @@ import tf.transformations as tf_trans
 from scipy.spatial import distance
 import queue
 from ultralytics import YOLO
-
+import time
 
 
 
@@ -112,22 +112,49 @@ class LidarReprojector:
         self.cam_fov_pub = rospy.Publisher('cam_fov_visualization', Marker, queue_size=10)
         self.quad_rviz_pub = rospy.Publisher('quadrotor', MarkerArray, queue_size=10)
         # Synchronize the topics with a slop of 0.1 seconds
-        self.ts = message_filters.ApproximateTimeSynchronizer([self.sub_image, self.sub_lidar, self.sub_odom], 30, 0.05)
+        self.ts = message_filters.ApproximateTimeSynchronizer([self.sub_image, self.sub_lidar, self.sub_odom], 3000, 0.05)
         self.ts.registerCallback(self.callback)
 
          # Create queues for lidar_msg and odom_msg
         self.lidar_msg_queue = queue.Queue(maxsize=self.queue_size)
         self.odom_msg_queue = queue.Queue(maxsize=self.queue_size)
+        self.frame_count = 0
 
 
     def callback(self, image_msg, lidar_msg, odom_msg):
         # Convert ROS PointCloud2 to PCL
         # Check if queues are full\
-        time_gap = (lidar_msg.header.stamp - image_msg.header.stamp).to_sec()
-        print(f"\n\n\nthe time gap lidar_time-image_time is: ======================{time_gap:.3f}")
-        if(lidar_msg.header.stamp < image_msg.header.stamp):
+        self.frame_count = self.frame_count+1
+        if(self.frame_count%2==0):
+            self.lidar_msg_queue.put(lidar_msg)
+            if self.lidar_msg_queue.full():
+                # Remove the oldest message (first in)
+                self.lidar_msg_queue.get()
+
+            self.odom_msg_queue.put(odom_msg)
+            if self.odom_msg_queue.full():
+                # Remove the oldest message (first in)
+                self.odom_msg_queue.get()
             return
-        self.lidar_msg_queue.put(lidar_msg)
+        print(f"\n\n=============================the time we entered callback is :{time.time()}")
+
+        filtered_lidar_msg = self.filter_lidar_msg(lidar_msg)
+
+        time_gap = (filtered_lidar_msg.header.stamp - image_msg.header.stamp).to_sec()
+        print(f"the time gap lidar_time-image_time is: ======================{time_gap:.3f}")
+        if(filtered_lidar_msg.header.stamp < image_msg.header.stamp):
+            return
+        
+        rpy_deg = odom_msg_to_rpy(odom_msg)
+        print(f"rpy_deg is : {rpy_deg}")
+        # if(abs(rpy_deg[0]) > 5.4):
+        if(abs(rpy_deg[0]) > 2.4):
+            print(f"roll is {rpy_deg[0]}, too large, we NOT generate 3D fruit in this frame")
+            print(f"return of this callback function")
+            return
+        
+        print(f"=================================the time we checked rpy :{time.time()}")
+        self.lidar_msg_queue.put(filtered_lidar_msg)
         if self.lidar_msg_queue.full():
             # Remove the oldest message (first in)
             self.lidar_msg_queue.get()
@@ -142,32 +169,32 @@ class LidarReprojector:
         self.publish_camera_fov_marker(odom_msg)
         self.publish_quad_rviz(odom_msg)
 
+        print(f"=======================the time add lidar_msg in queue and pub visualize markers :{time.time()}")
+
+        
+
         try:
             image = self.bridge.compressed_imgmsg_to_cv2(image_msg, "bgr8")
         except CvBridgeError as e:
             print(e)
-
-
-
         # Reproject points
         # points_arr = self.lidar_msg_to_xyz_array(lidar_msg)
         points_arr = self.lidar_msg_queue_to_xyz_array()
 
+        print(f"=============================================the time we turn ldiar msg to points_arr :{time.time()}")
+
         uvd_points = self.lidar_points_to_uvd(points_arr)  # YWY noly need uvd
+        print(f"==========================================the time we called lidar_points_to_uvs :{time.time()}")
         # self.plot_depth_histagram_with_gaussian(uvd_points, odom_msg)  #
         # self.twoD_fruit_detector.detect_fruit(image)
         # for fruit_point in self.twoD_fruit_detector.fruit_points_:
-        # fruit_points = self.twoD_fruit_detector.detect_fruit(image)
         # for fruit_point in fruit_points:
-        rpy_deg = odom_msg_to_rpy(odom_msg)
-        print(f"rpy_deg is : {rpy_deg}")
-        if(abs(rpy_deg[0]) > 5.4):
-            print(f"roll is {rpy_deg[0]}, too large, we NOT generate 3D fruit in this frame")
-            print(f"return of this callback function")
-            return
 
+        
+        # fruit_points = self.twoD_fruit_detector.detect_fruit(image)
         yolo_fruit_points = yolo_detect(image, self.yolo_model)
-
+        print(f"=================================================the time we called yolo :{time.time()}")
+        
         if(len(self.fruit_database.fruit_arr_.markers)>0):
             print(f"draw a new fruit_arr_ on a new image ===============================================")
             uvd_fruits = self.fruit_markers_to_uvd(odom_msg)
@@ -180,9 +207,8 @@ class LidarReprojector:
             print(f"image_mean_depth is {image_mean_depth}, we should do gaussian fitting here")
         else:
             print(f"image_mean_depth is {image_mean_depth}, no gaussian fitting")
-        
-        
-        
+
+        # for fruit_point in fruit_points:   # 速度还是 受 lidar reproect 影响大，优化一下 @TODO
         for fruit_point in yolo_fruit_points:
             print(f"rpy_deg is : {rpy_deg}")
             print(f"fruit is at ({int(fruit_point.x)},{int(fruit_point.y)}, {int(fruit_point.z)})")
@@ -235,6 +261,38 @@ class LidarReprojector:
     # def fruit_reprojection(self, fruit_XYZ_world):
     #     fruit_XYZ_lidar = self.transform_utils.Tlidar_world(fruit_XYZ_world)
     #     return fruit_XYZ_lidar
+
+
+    def filter_lidar_msg(self, lidar_msg):
+        # 解码原始的点云数据
+        point_cloud = point_cloud2.read_points(lidar_msg, field_names=("x", "y", "z"), skip_nans=True)
+
+        # 创建一个新的点云列表来存储满足条件的点
+        new_point_cloud = []
+
+        for point in point_cloud:
+            x, y, z = point
+            # 检查点是否满足条件
+            if 1 < x < 10 and -2 < y < 2:
+                new_point_cloud.append([x, y, z])
+
+        # 创建一个新的PointCloud2消息
+        new_lidar_msg = PointCloud2()
+        new_lidar_msg.header = lidar_msg.header
+        new_lidar_msg.height = 1
+        new_lidar_msg.width = len(new_point_cloud)
+        new_lidar_msg.fields = [
+            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
+            PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
+            PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1)
+        ]
+        new_lidar_msg.is_bigendian = False
+        new_lidar_msg.point_step = 12
+        new_lidar_msg.row_step = new_lidar_msg.point_step * new_lidar_msg.width
+        new_lidar_msg.is_dense = int(np.isfinite(new_point_cloud).all())
+        new_lidar_msg.data = np.asarray(new_point_cloud, np.float32).tostring()
+
+        return new_lidar_msg
 
     def plot_depth_histagram_with_gaussian(self, uvd_points, odom_msg):
         # Create histogram
@@ -341,14 +399,21 @@ class LidarReprojector:
         # Create a list of the points
         points_arr = list(point)
         points_arr = np.array(points_arr)
+        print(f"the size f points_arr before filter by xyz is: ({points_arr.shape})")
         points_arr = points_arr[points_arr[:, 0] >= 1]
-        points_arr = points_arr[points_arr[:, 1] <10]
-        points_arr = points_arr[-10< points_arr[:, 1]]
+        points_arr = points_arr[points_arr[:, 1] <3]
+        points_arr = points_arr[points_arr[:, 1] >-3]
+
+        # points_arr = points_arr[-10< points_arr[:, 1]]
+        # points_arr = points_arr[points_arr[:, 0] / points_arr[:, 1] <= 0.2]
+        # points_arr = points_arr[points_arr[:, 0] / points_arr[:, 1] <= -0.5]
         all_points_arr = np.array(points_arr)
+        print(f"the size f points_arr after filter by xyz is: ({all_points_arr.shape})")
         # print(f"================all_points_arr.shape: {all_points_arr.shape}")
 
 
         for i in range(0, self.lidar_msg_queue.qsize()-1):
+            print(f"inside msg_queue")
             # assert isinstance(lidar_msgs[i], PointCloud2)
             # assert isinstance(odom_msgs[i], Odometry)
             rot_mat_curr_pre, trans_vec_curr_pre = self.get_relative_transformation(self.odom_msg_queue.queue[i], self.odom_msg_queue.queue[self.odom_msg_queue.qsize()-1])
@@ -361,6 +426,14 @@ class LidarReprojector:
 
             # Convert the list to a numpy array
             points_arr = np.array(points_arr)
+            points_arr = points_arr[points_arr[:, 0] >= 1]
+            points_arr = points_arr[points_arr[:, 1] <3]
+            points_arr = points_arr[points_arr[:, 1] >-3]
+
+            # points_arr = points_arr[-10< points_arr[:, 1]]
+            # points_arr = points_arr[points_arr[:, 0] / points_arr[:, 1] <= 0.2]
+            # points_arr = points_arr[points_arr[:, 0] / points_arr[:, 1] <= -0.5]
+
             # print(f"================points_arr.shape: {points_arr.shape}")
 
 
@@ -510,12 +583,12 @@ class LidarReprojector:
         # nearest_dist_v = abs(uvd_points[sorted_indices[0],1]-fruit_point.y)
         # print(f"nearest_dist is {nearest_dist_v}")
         # if nearest_dist > 1:
-        if nearest_dist > fruit_size*0.6:
+        if nearest_dist > fruit_size*0.2:
             print("we have returned empty knn_points here")
             has_valid_depth = False
         else:
             has_valid_depth = True
-        #     print(f"set has_valid_depth as {has_valid_depth}")
+            print(f"set has_valid_depth as {has_valid_depth}")
         # Select the top k points
         # 不同水果大小，需要的 knn 中 k 的数量根据 fruit_size 改变
         knn_indices = sorted_indices[:(int(fruit_size)+4)]
@@ -526,7 +599,7 @@ class LidarReprojector:
         print(f"the fruit_point is at ({fruit_point.x:.2f},{fruit_point.y:.2f}), fruit_size is {fruit_point.z:.2f}")
         for i in range(0,len(knn_points)-1):
             pxiel_dist = abs(uvd_points)
-            print(f"{i}th point is {knn_points[i]}, and pixel dist is {knn_points_dist[i]:.2f}")
+            # print(f"{i}th point is {knn_points[i]}, and pixel dist is {knn_points_dist[i]:.2f}")
 
 
         return knn_points
