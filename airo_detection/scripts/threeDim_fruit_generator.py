@@ -1,3 +1,14 @@
+import torch
+from ultralytics import YOLO
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print(device)
+yolo_model = YOLO("/root/lala_ws/src/icuas24_finals/airo_detection/scripts/detect_fruit_test/demo_data/best.pt")
+yolo_model.to(device)
+
+exit()
+
+
 import rospy
 import cv2
 import numpy as np
@@ -95,7 +106,8 @@ class LidarReprojector:
         self.fruit_database = PlantFruitDatabase()
         self.transform_utils = TransformUtils()
         self.twoD_fruit_detector = TwoDFruitDetector()
-        self.yolo_model = YOLO("/home/allen/icuas24_ws_mini/src/airo_detection/scripts/detect_fruit_test/demo_data/last.pt")
+        self.yolo_model = YOLO("/root/lala_ws/src/icuas24_finals/airo_detection/scripts/detect_fruit_test/demo_data/best.pt")
+        
 
 
         # ROS node and subscriber
