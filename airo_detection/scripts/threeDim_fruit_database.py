@@ -4,7 +4,7 @@ import math
 
 from visualization_msgs.msg import Marker, MarkerArray
 from geometry_msgs.msg import Quaternion
-
+from std_msgs.msg import Int32
 
 
 def calc_marker_dist(marker1, marker2):
@@ -27,39 +27,35 @@ def calc_marker_dist(marker1, marker2):
 
 class PlantFruitDatabase:
     def __init__(self):
-        self.fruit_pub = rospy.Publisher("fruit_arr_", MarkerArray, queue_size=10)
-        self.fruit_arr_ = MarkerArray()
+        self.red_fruit_pub = rospy.Publisher("/red_fruit_arr_", MarkerArray, queue_size=10)
+        self.red_fruit_count_pub = rospy.Publisher('/red_fruit_count', Int32, queue_size=10, latch=True)
+        self.red_fruit_arr_ = MarkerArray()
+        self.yellow_fruit_pub = rospy.Publisher("/yellow_fruit_arr_", MarkerArray, queue_size=10)
+        self.yellow_fruit_count_pub = rospy.Publisher('/yellow_fruit_count', Int32, queue_size=10, latch=True)
+        self.yellow_fruit_arr_ = MarkerArray()
 
         self.green_dist = 1.0
         self.red_dist = 1.18
         self.yellow_dist = 1.5
 
-    def add_fruit_marker(self, fruit_color, fruit_id, position, rpy_roll, two_d_size):
+    def add_red_fruit_marker(self, fruit_color, fruit_id, position, rpy_roll, two_d_size):
         print("add_fruit_marker() called")
         marker = Marker()
         marker.header.frame_id = "camera_init"
         marker.type = marker.SPHERE
         marker.action = marker.ADD
-        if(two_d_size > 16):
-            print(f"we got a very large fruit with size {two_d_size}")
-            print(f"we got a very large fruit with size {two_d_size}")
-            print(f"we got a very large fruit with size {two_d_size}")
-            print(f"we got a very large fruit with size {two_d_size}")
-            print(f"we got a very large fruit with size {two_d_size}")
-        yellow_size = two_d_size/10
-        marker.scale.x = yellow_size
-        marker.scale.y = yellow_size
-        marker.scale.z = yellow_size
+
+        fruit_size = two_d_size/10
+        marker.scale.x = fruit_size
+        marker.scale.y = fruit_size
+        marker.scale.z = fruit_size
         marker.color.a = 0.5
         if(np.isnan(position[0]) or np.isnan(position[1]) or np.isnan(position[2])):
             print("fruit pose isnan, return")
             return
 
         position[0] = round(position[0],0)
-        # if(position[0]<4):
-        #     position[0] = 3.5
-        # elif(4.8 < position[0]):
-        #     position[0] = 6.5
+
         marker.pose.position.x = position[0]
         marker.pose.position.y = position[1]
         marker.pose.position.z = position[2]
@@ -67,50 +63,87 @@ class PlantFruitDatabase:
         marker.id = fruit_id
 
         rpy_roll = abs(rpy_roll)
-        for old_marker in self.fruit_arr_.markers:
+
+        for i in range(0,len(self.red_fruit_arr_.markers)):
+            old_marker = self.red_fruit_arr_.markers[i]
             dist = calc_marker_dist(old_marker, marker)
-            if (dist <= self.yellow_dist and fruit_color == "yellow"):
-                print("duplicate fruit by 3D dist, IIR and return")
+            if (dist <= self.red_dist):
+                print("duplicate red_fruit by 3D dist, IIR and return")
+                old_marker.pose.position.x = (rpy_roll*old_marker[i].pose.position.x + marker.pose.position.x)/(rpy_roll+1)
+                old_marker.pose.position.y = (rpy_roll*old_marker.pose.position.y + marker.pose.position.y)/(rpy_roll+1)
+                old_marker.pose.position.z = (rpy_roll*old_marker.pose.position.z + marker.pose.position.z)/(rpy_roll+1)
+                old_marker.color.a = old_marker.color.a + 0.5
+                old_marker.scale.x = (3*old_marker.scale.x + fruit_size)/4
+                old_marker.scale.y = (3*old_marker.scale.y + fruit_size)/4
+                old_marker.scale.z = (3*old_marker.scale.z + fruit_size)/4
+                # self.red_fruit_count_pub.publish(i+1)
+                return i+1
+        # if it's a new red
+        marker.color.r = 1.0
+        marker.color.g = 0.0
+        marker.color.b = 0.0
+        self.red_fruit_arr_.markers.append(marker)
+        new_red_id = len(self.red_fruit_arr_.markers)
+        self.red_fruit_count_pub.publish(new_red_id)
+        return new_red_id
+
+    def add_yellow_fruit_marker(self, fruit_color, fruit_id, position, rpy_roll, two_d_size):
+        print("add_fruit_marker() called")
+        marker = Marker()
+        marker.header.frame_id = "camera_init"
+        marker.type = marker.SPHERE
+        marker.action = marker.ADD
+
+        fruit_size = two_d_size/10
+        marker.scale.x = fruit_size
+        marker.scale.y = fruit_size
+        marker.scale.z = fruit_size
+        marker.color.a = 0.5
+        if(np.isnan(position[0]) or np.isnan(position[1]) or np.isnan(position[2])):
+            print("fruit pose isnan, return")
+            return
+
+        position[0] = round(position[0],0)
+
+        marker.pose.position.x = position[0]
+        marker.pose.position.y = position[1]
+        marker.pose.position.z = position[2]
+        marker.pose.orientation = Quaternion(0,0,0,1)
+        marker.id = fruit_id
+
+        rpy_roll = abs(rpy_roll)
+
+        for i in range(0,len(self.yellow_fruit_arr_.markers)):
+            old_marker = self.yellow_fruit_arr_.markers[i]
+            dist = calc_marker_dist(old_marker, marker)
+            if (dist <= self.yellow_dist):
+                print("duplicate yellow_fruit by 3D dist, IIR and return")
                 old_marker.pose.position.x = (rpy_roll*old_marker.pose.position.x + marker.pose.position.x)/(rpy_roll+1)
                 old_marker.pose.position.y = (rpy_roll*old_marker.pose.position.y + marker.pose.position.y)/(rpy_roll+1)
                 old_marker.pose.position.z = (rpy_roll*old_marker.pose.position.z + marker.pose.position.z)/(rpy_roll+1)
                 old_marker.color.a = old_marker.color.a + 0.5
-                old_marker.scale.x = (3*old_marker.scale.x + yellow_size)/4
-                old_marker.scale.y = (3*old_marker.scale.y + yellow_size)/4
-                old_marker.scale.z = (3*old_marker.scale.z + yellow_size)/4
-                return
-            if (dist <= self.red_dist and fruit_color == "red"):
-                print("duplicate fruit by 3D dist, IIR and return")
-                old_marker.pose.position.x = (rpy_roll*old_marker.pose.position.x + marker.pose.position.x)/(rpy_roll+1)
-                old_marker.pose.position.y = (rpy_roll*old_marker.pose.position.y + marker.pose.position.y)/(rpy_roll+1)
-                old_marker.pose.position.z = (rpy_roll*old_marker.pose.position.z + marker.pose.position.z)/(rpy_roll+1)
-                return
+                old_marker.scale.x = (3*old_marker.scale.x + fruit_size)/4
+                old_marker.scale.y = (3*old_marker.scale.y + fruit_size)/4
+                old_marker.scale.z = (3*old_marker.scale.z + fruit_size)/4
+                # self.yellow_fruit_count_pub.publish(i+1)
+                print(f"yellow_id by IIR is: {i+1}, start from 1, NOT 0")
+                return i+1
+        # if it's a new yellow
+        marker.color.r = 1.0
+        marker.color.g = 1.0
+        marker.color.b = 0.0
+        self.yellow_fruit_arr_.markers.append(marker)
+        new_yellow_id = len(self.yellow_fruit_arr_.markers)
+        self.yellow_fruit_count_pub.publish(new_yellow_id)
+        print(f"new_yellow_id is: {new_yellow_id}")
+        return new_yellow_id
 
-            
 
-        if fruit_color == 'yellow':
-            marker.color.r = 1.0
-            marker.color.g = 1.0
-            marker.color.b = 0.0
-            self.fruit_arr_.markers.append(marker)
-        elif fruit_color == 'red':
-            marker.color.r = 1.0
-            marker.color.g = 0.0
-            marker.color.b = 0.0
-            self.fruit_arr_.markers.append(marker)
-        elif fruit_color == 'purple':
-            marker.color.r = 0.5
-            marker.color.g = 0.0
-            marker.color.b = 0.5
-            marker.type = marker.CYLINDER
-            marker.scale.x = 0.12
-            marker.scale.y = 0.12
-            marker.scale.z = 0.3
-            self.fruit_arr_.markers.append(marker)
 
 
     def publish_markers(self):
         # print("publish from class===================================================")
-        self.fruit_pub.publish(self.fruit_arr_)
+        self.red_fruit_pub.publish(self.red_fruit_arr_)
+        self.yellow_fruit_pub.publish(self.yellow_fruit_arr_)
 
 

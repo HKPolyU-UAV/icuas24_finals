@@ -91,6 +91,7 @@ class LidarReprojector:
         self.transvec_lidar_imu_g = np.array([0.0,0.15,-0.25])
         self.transvec_cam_imu_g = np.array([-0.07,0.0,-0.15])
         self.lidar_projected_image_pub = rospy.Publisher('/fused_image_ooad', Image, queue_size=10)
+        self.fruit_detections_pub = rospy.Publisher('/fruit_detections', Image, queue_size=10)
 
         self.fruit_database = PlantFruitDatabase()
         self.transform_utils = TransformUtils()
@@ -195,7 +196,8 @@ class LidarReprojector:
         yolo_fruit_yellows, yolo_fruit_reds = yolo_detect(image, self.yolo_model)
         print(f"=================================================the time we called yolo :{time.time()}")
         
-        if(len(self.fruit_database.fruit_arr_.markers)>0):
+        image_fruit_detections = image.copy()
+        if(len(self.fruit_database.red_fruit_arr_.markers)>0 or len(self.fruit_database.yellow_fruit_arr_.markers)>0):
             print(f"draw a new fruit_arr_ on a new image ===============================================")
             uvd_fruits = self.fruit_markers_to_uvd(odom_msg)
             image = self.colorize_fruits_uvd(uvd_fruits, image)
@@ -208,8 +210,13 @@ class LidarReprojector:
         else:
             print(f"image_mean_depth is {image_mean_depth}, no gaussian fitting")
 
-        self.add_fruits_from_yolo_detection(yolo_fruit_yellows, "yellow", uvd_points, image_with_lidar_points, odom_msg)
-        self.add_fruits_from_yolo_detection(yolo_fruit_reds, "red", uvd_points, image_with_lidar_points, odom_msg)
+        # self.add_red_fruits_from_yolo_detection(yolo_fruit_reds, "red", uvd_points, image_with_lidar_points, odom_msg, image_fruit_detections)
+        self.add_yellow_fruits_from_yolo_detection(yolo_fruit_yellows, "yellow", uvd_points, image_with_lidar_points, odom_msg, image_fruit_detections)
+        self.add_red_fruits_from_yolo_detection(yolo_fruit_reds, "red", uvd_points, image_with_lidar_points, odom_msg, image_fruit_detections)
+        # fruit_detections_image_msg = self.bridge.cv2_to_imgmsg(image_fruit_detections, "bgr8")
+        # fruit_detections_image_msg.header = odom_msg.header
+        # self.fruit_detections_pub.publish(fruit_detections_image_msg)
+        
         # self.add_fruits_from_yolo_detection(yolo_fruit_reds, "red", uvd_points, image_with_lidar_points)
         # for fruit_point in fruit_points:   # 速度还是 受 lidar reproect 影响大，优化一下 @TODO
         # for fruit_point in yolo_fruit_yellows:
@@ -259,7 +266,7 @@ class LidarReprojector:
     #     fruit_XYZ_lidar = self.transform_utils.Tlidar_world(fruit_XYZ_world)
     #     return fruit_XYZ_lidar
 
-    def add_fruits_from_yolo_detection(self, yolo_fruits, color, uvd_points, image_with_lidar_points, odom_msg):
+    def add_yellow_fruits_from_yolo_detection(self, yolo_fruits, color, uvd_points, image_with_lidar_points, odom_msg, image_fruit_detections):
         for fruit_point in yolo_fruits:
             # print(f"rpy_deg is : {rpy_deg}")
             print(f"fruit is at ({int(fruit_point.x)},{int(fruit_point.y)}, {int(fruit_point.z)})")
@@ -268,7 +275,7 @@ class LidarReprojector:
             image_with_lidar_points = self.draw_bbx(image_with_lidar_points, color, int(fruit_point.x),int(fruit_point.y), int(fruit_point.z))
 
             # fruit_point.z = fruit_point.z
-            fruit_depth = self.find_fruit_depth(uvd_points, fruit_point)
+            fruit_depth = self.find_yellow_fruit_depth(uvd_points, fruit_point)
             # fruit_depth = self.find_yolo_fruit_depth(float(fruit_point.z))
             # XYZ_yellow = self.transform_utils.uvd_to_world(fruit_point.x, fruit_point.y, fruit_depth, odom_msg)
             
@@ -288,10 +295,63 @@ class LidarReprojector:
                 position = (int(fruit_point.x), int(fruit_point.y))  # You can adjust this according to your needs
 
                 # if(fruit_depth > 3 and fruit_depth < 9 and XYZ_yellow[0] > 2 and XYZ_yellow[0]< 8) and XYZ_yellow[2]<0.5 and XYZ_yellow[2]>-2:
-                curr_yellow_id = len(self.fruit_database.fruit_arr_.markers)
+                curr_red_id = len(self.fruit_database.red_fruit_arr_.markers)
+                curr_yellow_id = len(self.fruit_database.yellow_fruit_arr_.markers)
+                print(f"we have============================= {curr_red_id} ============================red fruits now")
                 print(f"we have============================= {curr_yellow_id} ============================yellow fruits now")
                 # self.fruit_database.add_fruit_marker('yellow', curr_yellow_id, XYZ_yellow, abs(rpy_ywy[0]))
-                self.fruit_database.add_fruit_marker(color, curr_yellow_id, XYZ_yellow, abs(8), fruit_point.z)
+                yellow_id = self.fruit_database.add_yellow_fruit_marker(color, curr_yellow_id, XYZ_yellow, abs(8), fruit_point.z)
+                image_fruit_detections = self.draw_yellow_bbx(image_fruit_detections, color, int(fruit_point.x),int(fruit_point.y), int(fruit_point.z), yellow_id)
+                
+                fruit_detections_image_msg = self.bridge.cv2_to_imgmsg(image_fruit_detections, "bgr8")
+                fruit_detections_image_msg.header = odom_msg.header
+                self.fruit_detections_pub.publish(fruit_detections_image_msg)
+
+                self.fruit_database.publish_markers()
+                cv2.putText(image_with_lidar_points, 'ADD ONE FRUIT', position, font, font_scale, color_g, thickness=2)
+
+
+    def add_red_fruits_from_yolo_detection(self, yolo_fruits, color, uvd_points, image_with_lidar_points, odom_msg, image_fruit_detections):
+        for fruit_point in yolo_fruits:
+            # print(f"rpy_deg is : {rpy_deg}")
+            print(f"fruit is at ({int(fruit_point.x)},{int(fruit_point.y)}, {int(fruit_point.z)})")
+            # fruit_point = PointStamped()
+            # fruit_point = two_d_fruit_keypoints_msg.point
+            image_with_lidar_points = self.draw_bbx(image_with_lidar_points, color, int(fruit_point.x),int(fruit_point.y), int(fruit_point.z))
+
+            # fruit_point.z = fruit_point.z
+            fruit_depth = self.find_red_fruit_depth(uvd_points, fruit_point)
+            # fruit_depth = self.find_yolo_fruit_depth(float(fruit_point.z))
+            # XYZ_yellow = self.transform_utils.uvd_to_world(fruit_point.x, fruit_point.y, fruit_depth, odom_msg)
+            
+            print(f"has_valid_depth is {fruit_depth}")
+            if(not fruit_depth):
+                print(f"no valid depth")
+                return
+            elif(fruit_depth):
+                print(f"has valid depth")
+                XYZ_yellow = self.transform_utils.uvd_to_world(fruit_point.x, fruit_point.y, fruit_depth, odom_msg)
+                
+                font = cv2.FONT_HERSHEY_SIMPLEX
+                font_scale = 0.5
+                color_g = (0, 255, 0)  # BGR color for blue
+                color_r = (0, 0, 0)  # BGR color for blue
+                # Position for the text
+                position = (int(fruit_point.x), int(fruit_point.y))  # You can adjust this according to your needs
+
+                # if(fruit_depth > 3 and fruit_depth < 9 and XYZ_yellow[0] > 2 and XYZ_yellow[0]< 8) and XYZ_yellow[2]<0.5 and XYZ_yellow[2]>-2:
+                curr_red_id = len(self.fruit_database.red_fruit_arr_.markers)
+                curr_yellow_id = len(self.fruit_database.yellow_fruit_arr_.markers)
+                print(f"we have============================= {curr_red_id} ============================red fruits now")
+                print(f"we have============================= {curr_yellow_id} ============================yellow fruits now")
+                # self.fruit_database.add_fruit_marker('yellow', curr_yellow_id, XYZ_yellow, abs(rpy_ywy[0]))
+                yellow_id = self.fruit_database.add_red_fruit_marker(color, curr_yellow_id, XYZ_yellow, abs(8), fruit_point.z)
+                image_fruit_detections = self.draw_red_bbx(image_fruit_detections, color, int(fruit_point.x),int(fruit_point.y), int(fruit_point.z), yellow_id)
+                
+                fruit_detections_image_msg = self.bridge.cv2_to_imgmsg(image_fruit_detections, "bgr8")
+                fruit_detections_image_msg.header = odom_msg.header
+                self.fruit_detections_pub.publish(fruit_detections_image_msg)
+
                 self.fruit_database.publish_markers()
                 cv2.putText(image_with_lidar_points, 'ADD ONE FRUIT', position, font, font_scale, color_g, thickness=2)
 
@@ -543,7 +603,58 @@ class LidarReprojector:
     
     # fruit_point 包括 (x,y,size)
     # 根据 size 判断是否合理
-    def find_fruit_depth(self, uvd_points, fruit_point):
+    def find_red_fruit_depth(self, uvd_points, fruit_point):
+        # Calculate the Manhattan distance between each point in uvd_points and fruit_point
+        knn_points = self.find_knn(uvd_points, fruit_point)
+        
+        fruit_size = fruit_point.z
+        knn_points_noOutlier = self.remove_outliers(knn_points)
+        weighted_depth, depth_mean, depth_var = self.find_depth_mean_var(knn_points_noOutlier, fruit_point)
+        print(f"mean of depth is: {depth_mean};\nVariance of depth is: {depth_var}")
+        print(f"mean of weighted_depth is: {weighted_depth};\nVariance of depth is: {depth_var}")
+        if((depth_var/fruit_size) > 0.33):
+            print(f"the dpeth_var is {depth_var}/{fruit_size} = {depth_var/fruit_size}, TOO LARGE, return")
+            return False
+        else:
+            fruit_depth = depth_mean
+            fruit_depth = weighted_depth
+            print(f"valid_var, the fruit_depth is set as {weighted_depth}")
+        
+        has_valid_depth = self.check_knn_dist(knn_points_noOutlier, fruit_point)
+        if(not has_valid_depth):
+            fruit_depth = False
+            return
+        else:
+            pass
+        # fruit_depth = self.find_mode_depth(knn_points, fruit_size)
+        # sol 1: 除法
+        # if(fruit_depth*fruit_size>10 or fruit_depth/fruit_size<0.5):
+        # sol 2: 乘法
+        # dist2size
+        if((fruit_depth*fruit_size)>75):
+            print(f"fruit_depth*fruit_size>75, return false")
+            fruit_depth = False
+
+        if((fruit_depth*fruit_size)<50):
+            print(f"fruit_depth*fruit_size<50, return false")
+            fruit_depth = False
+
+        d3size = fruit_size*(fruit_depth**3)
+        if(d3size > 2500):
+            print(f"fruit_size*(fruit_depth**3) is {d3size} > 2500, return false")
+            fruit_depth = False
+
+        # 主要还是深度的问题
+        # 点云line不应该有重叠，intrinsic 问题
+        # if(fruit_size>5 and fruit_depth>4):
+        #     print(f"fruit_depth*fruit_depth*fruit_size>80, return false")
+        #     fruit_depth = False
+        # if(fruit_size<5 and fruit_depth<4):
+        #     print(f"fruit_depth*fruit_depth*fruit_size>80, return false")
+        #     fruit_depth = False
+        return fruit_depth
+    
+    def find_yellow_fruit_depth(self, uvd_points, fruit_point):
         # Calculate the Manhattan distance between each point in uvd_points and fruit_point
         knn_points = self.find_knn(uvd_points, fruit_point)
         
@@ -745,7 +856,7 @@ class LidarReprojector:
         # Loop through each marker in the MarkerArray
         # Initialize an empty list to hold the marker positions
         worldXYZ_fruit = np.empty((0,3))
-        for marker in self.fruit_database.fruit_arr_.markers:
+        for marker in self.fruit_database.yellow_fruit_arr_.markers:
             marker_position = marker.pose.position
             new_fruit = np.array([marker_position.x, marker_position.y, marker_position.z])
             print(f"marker poistion is ({new_fruit})")
@@ -805,20 +916,64 @@ class LidarReprojector:
         # Draw the bounding box
         cv2.rectangle(image, (x1, y1), (x1+w, y1+h), (0, 255, 0), 2)
         # Add a text label with a background color
-        label = "Yellow42"
+        label = color_string
         font = cv2.FONT_HERSHEY_SIMPLEX
-        font_scale = 0.4
+        font_scale = 0.6
         thickness = 2
         text_size, _ = cv2.getTextSize(label, font, font_scale, thickness)
-        text_x, text_y = x1, y1 - 10
+        text_x, text_y = x1-15, y1
         if(color_string == 'yellow'):
             image = cv2.circle(image, (int(x),int(y)), radius = size, color=(0,255,255), thickness=3)
-            cv2.rectangle(image, (text_x, text_y - text_size[1]), (text_x + text_size[0], text_y + text_size[1]), (0,255,255), -1)
-            cv2.putText(image, label, (text_x, text_y), font, font_scale, (0,0,0), thickness)
+            cv2.rectangle(image, (text_x, text_y - text_size[1]), (text_x + text_size[0], text_y), (0,255,255), -1)
+            cv2.putText(image, "Yellow", (text_x, text_y), font, font_scale, (0,0,0), thickness)
         if(color_string == 'red'):
             image = cv2.circle(image, (int(x),int(y)), radius = size, color=(0,0,255), thickness=3)
-            cv2.rectangle(image, (text_x, text_y - text_size[1]), (text_x + text_size[0], text_y + text_size[1]), (0,0,255), -1)
-            cv2.putText(image, label, (text_x, text_y), font, font_scale, (0,0,0), thickness)
+            red_text_x =text_x+3
+            cv2.rectangle(image, (red_text_x, text_y - text_size[1]), (red_text_x + text_size[0], text_y), (0,0,255), -1)
+            cv2.putText(image, "Red", (text_x, text_y), font, font_scale, (0,0,0), thickness)
+        return image
+    
+    def draw_red_bbx(self, image, color_string, x, y, size, red_id):
+        # Specify the center of the box (x, y)
+        # Specify the width and height of the box
+        w = size
+        h = size
+        # Calculate the top left corner of the box
+        x1, y1 = int(x - w/2), int(y - h/2)
+        # Draw the bounding box
+        cv2.rectangle(image, (x1, y1), (x1+w, y1+h), (0, 0, 255), 2)
+        # Add a text label with a background color
+        label = "Red"+str(red_id)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6
+        thickness = 2
+        text_size, _ = cv2.getTextSize(label, font, font_scale, thickness)
+        text_x, text_y = x1-10, y1
+
+        # image = cv2.circle(image, (int(x),int(y)), radius = size, color=(0,0,255), thickness=3)
+        cv2.rectangle(image, (text_x, text_y - text_size[1]), (text_x + text_size[0], text_y), (0,0,255), -1)
+        cv2.putText(image, label, (text_x, text_y), font, font_scale, (0,0,0), thickness)
+        return image
+    
+    def draw_yellow_bbx(self, image, color_string, x, y, size, yellow_id):
+        # Specify the center of the box (x, y)
+        # Specify the width and height of the box
+        w = size
+        h = size
+        # Calculate the top left corner of the box
+        x1, y1 = int(x - w/2), int(y - h/2)
+        # Draw the bounding box
+        cv2.rectangle(image, (x1, y1), (x1+w, y1+h), (0, 255, 255), 2)
+        # Add a text label with a background color
+        label = "Yellow"+str(yellow_id)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6
+        thickness = 2
+        text_size, _ = cv2.getTextSize(label, font, font_scale, thickness)
+        text_x, text_y = x1-20, y1
+        # image = cv2.circle(image, (int(x),int(y)), radius = size, color=(0,255,255), thickness=3)
+        cv2.rectangle(image, (text_x, text_y - text_size[1]), (text_x + text_size[0], text_y), (0,255,255), -1)
+        cv2.putText(image, label, (text_x, text_y), font, font_scale, (0,0,0), thickness)
         return image
     
     def publish_camera_fov_marker(self, odom_msg):
