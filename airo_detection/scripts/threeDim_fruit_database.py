@@ -31,8 +31,8 @@ class PlantFruitDatabase:
         self.fruit_arr_ = MarkerArray()
 
         self.green_dist = 1.0
-        self.red_dist = 0.18
-        self.yellow_dist = 1.1
+        self.red_dist = 1.18
+        self.yellow_dist = 1.5
 
     def add_fruit_marker(self, fruit_color, fruit_id, position, rpy_roll, two_d_size):
         print("add_fruit_marker() called")

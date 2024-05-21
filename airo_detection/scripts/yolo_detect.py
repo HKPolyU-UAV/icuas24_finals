@@ -12,7 +12,7 @@ print(f"before we load the model and the image\n\n")
 # Load a pretrained YOLO model (recommended for training)
 # Load a pretrained YOLO model (recommended for training)/home/allen/icuas24_ws_mini/src/airo_detection/scripts/last_yolo.pt
 
-# model = YOLO("/home/allen/icuas24_ws_mini/src/airo_detection/scripts/detect_fruit_test/demo_data/last.pt")
+model = YOLO("/home/allen/icuas24_ws_mini/src/airo_detection/scripts/detect_fruit_test/demo_data/last.pt")
 
 
 # Load the image
@@ -23,7 +23,8 @@ print(f"before we load the model and the image\n\n")
 def yolo_detect(image, model):
     print("yolo_detect() called")
     # Process results list
-    yolo_fruit_points = []
+    yolo_fruit_yellows = []
+    yolo_fruit_reds = []
     results = model(image)
     for result in results:
         boxes = result.boxes  # Boxes object for bounding box outputs
@@ -40,14 +41,21 @@ def yolo_detect(image, model):
             print(f"class index is: {class_index}")
             print(f"Confidence: {confidence:.2f}")
             if(class_name == "yellow"):
-                print("inside")
+                print("yolo detect one yellow")
                 point = Point()
                 point.x = float(xywh[0])
                 point.y = float(xywh[1])
                 point.z = float((xywh[2]+xywh[3])/2)
-                yolo_fruit_points.append(point)
+                yolo_fruit_yellows.append(point)
+            if(class_name == "red"):
+                print("yolo detect one red")
+                point = Point()
+                point.x = float(xywh[0])
+                point.y = float(xywh[1])
+                point.z = float((xywh[2]+xywh[3])/2)
+                yolo_fruit_reds.append(point)
                 
-    return yolo_fruit_points
+    return yolo_fruit_yellows, yolo_fruit_reds
     # print(f"=======================================================")
     # result.show()  # display to screen
     # result.save(filename="result.jpg")  # save to disk
