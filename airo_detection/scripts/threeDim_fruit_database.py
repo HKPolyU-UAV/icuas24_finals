@@ -69,7 +69,7 @@ class PlantFruitDatabase:
             dist = calc_marker_dist(old_marker, marker)
             if (dist <= self.red_dist):
                 print("duplicate red_fruit by 3D dist, IIR and return")
-                old_marker.pose.position.x = (rpy_roll*old_marker[i].pose.position.x + marker.pose.position.x)/(rpy_roll+1)
+                old_marker.pose.position.x = (rpy_roll*old_marker.pose.position.x + marker.pose.position.x)/(rpy_roll+1)
                 old_marker.pose.position.y = (rpy_roll*old_marker.pose.position.y + marker.pose.position.y)/(rpy_roll+1)
                 old_marker.pose.position.z = (rpy_roll*old_marker.pose.position.z + marker.pose.position.z)/(rpy_roll+1)
                 old_marker.color.a = old_marker.color.a + 0.5
