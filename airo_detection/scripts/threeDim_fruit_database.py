@@ -170,4 +170,3 @@ class PlantFruitDatabase:
         # print("publish from class===================================================")
         self.red_fruit_pub.publish(self.red_fruit_arr_)
         self.yellow_fruit_pub.publish(self.yellow_fruit_arr_)
-
