@@ -40,7 +40,7 @@ class PlantFruitDatabase:
         self.real_yellow_fruit_arr_ = []
         self.real_red_fruit_arr_ = []
 
-        self.red_dist = 0.9
+        self.red_dist = 1.1
         self.yellow_dist = 1.0
 
     def add_red_fruit_marker(self, fruit_color, fruit_id, position, rpy_roll, two_d_size):
@@ -54,7 +54,7 @@ class PlantFruitDatabase:
         marker.scale.x = fruit_size
         marker.scale.y = fruit_size
         marker.scale.z = fruit_size
-        marker.color.a = 0.5
+        marker.color.a = 0.2
         if(np.isnan(position[0]) or np.isnan(position[1]) or np.isnan(position[2])):
             print("fruit pose isnan, return")
             return
@@ -80,17 +80,19 @@ class PlantFruitDatabase:
                 old_marker.pose.position.x = (rpy_roll*old_marker.pose.position.x + marker.pose.position.x)/(rpy_roll+1)
                 old_marker.pose.position.y = (rpy_roll*old_marker.pose.position.y + marker.pose.position.y)/(rpy_roll+1)
                 old_marker.pose.position.z = (rpy_roll*old_marker.pose.position.z + marker.pose.position.z)/(rpy_roll+1)
-                old_marker.color.a = old_marker.color.a + 0.5
+                old_marker.color.a = old_marker.color.a + 0.2
                 old_marker.scale.x = (3*old_marker.scale.x + fruit_size)/4
                 old_marker.scale.y = (3*old_marker.scale.y + fruit_size)/4
                 old_marker.scale.z = (3*old_marker.scale.z + fruit_size)/4
                 # self.red_fruit_count_pub.publish(i+1)
                 this_id = i+1
 
-            if(old_marker.color.a > 0.7):
+            if(old_marker.color.a >= 1):
                 self.real_red_fruit_arr_.append(1)
-            else:
+            elif(0.4 <= old_marker.color.a < 1):
                 half_count = half_count+0.5
+            elif(old_marker.color.a < 0.4):
+                print("new fruit, not take into account")
         # if it's a new red
         marker.color.r = 1.0
         marker.color.g = 0.0
@@ -114,7 +116,7 @@ class PlantFruitDatabase:
         marker.scale.x = fruit_size
         marker.scale.y = fruit_size
         marker.scale.z = fruit_size
-        marker.color.a = 0.5
+        marker.color.a = 0.3
         if(np.isnan(position[0]) or np.isnan(position[1]) or np.isnan(position[2])):
             print("fruit pose isnan, return")
             return
@@ -140,18 +142,19 @@ class PlantFruitDatabase:
                 old_marker.pose.position.x = (rpy_roll*old_marker.pose.position.x + marker.pose.position.x)/(rpy_roll+1)
                 old_marker.pose.position.y = (rpy_roll*old_marker.pose.position.y + marker.pose.position.y)/(rpy_roll+1)
                 old_marker.pose.position.z = (rpy_roll*old_marker.pose.position.z + marker.pose.position.z)/(rpy_roll+1)
-                old_marker.color.a = old_marker.color.a + 0.5
+                old_marker.color.a = old_marker.color.a + 0.3
                 old_marker.scale.x = (3*old_marker.scale.x + fruit_size)/4
                 old_marker.scale.y = (3*old_marker.scale.y + fruit_size)/4
                 old_marker.scale.z = (3*old_marker.scale.z + fruit_size)/4
                 # self.yellow_fruit_count_pub.publish(i+1)
                 print(f"yellow_id by IIR is: {i+1}, start from 1, NOT 0")
                 this_id = i+1
-            if(old_marker.color.a > 0.7):
+            if(old_marker.color.a > 0.5):
                 self.real_yellow_fruit_arr_.append(1)
-                print(f"real_yellow_fruit_arr_: {self.real_yellow_fruit_arr_}")
-            else:
-                half_count = half_count+1
+            elif(0.2 < old_marker.color.a < 0.5):
+                half_count = half_count+0.6
+            # elif(old_marker.color.a == 0.3):
+            #     print(f"real_yellow_fruit_arr_: {self.real_yellow_fruit_arr_}")
         # if it's a new yellow
         marker.color.r = 1.0
         marker.color.g = 1.0
