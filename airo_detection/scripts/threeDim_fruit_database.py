@@ -17,11 +17,6 @@ def calc_marker_dist(marker1, marker2):
     dz = marker1.pose.position.z - marker2.pose.position.z
     dist = math.sqrt(dx*dx + dy*dy + dz*dz)
 
-    # print("calc_marker_dist() dx:", dx)
-    # print("calc_marker_dist() dy:", dy)
-    # print("calc_marker_dist() dz:", dz)
-    # print("calc_marker_dist() dist is:", dist)
-
     if math.isnan(dist):
         print("dist is nan")
         return 0
@@ -44,7 +39,7 @@ class PlantFruitDatabase:
         self.yellow_dist = 1.0
 
     def add_red_fruit_marker(self, fruit_color, fruit_id, position, rpy_roll, two_d_size):
-        print(f"add_fruit_marker() called, the pose is\n{position}")
+        print(f"add_red_fruit_marker() called, the pose is\n{position}")
         marker = Marker()
         marker.header.frame_id = "camera_init"
         marker.type = marker.SPHERE
@@ -106,7 +101,7 @@ class PlantFruitDatabase:
         return this_id
 
     def add_yellow_fruit_marker(self, fruit_color, fruit_id, position, rpy_roll, two_d_size):
-        print("add_fruit_marker() called")
+        print("add_yellow_fruit_marker() called")
         marker = Marker()
         marker.header.frame_id = "camera_init"
         marker.type = marker.SPHERE
