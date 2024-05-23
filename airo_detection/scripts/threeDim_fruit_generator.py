@@ -96,7 +96,7 @@ class LidarReprojector:
         self.fruit_database = PlantFruitDatabase()
         self.transform_utils = TransformUtils()
         self.twoD_fruit_detector = TwoDFruitDetector()
-        self.yolo_model = YOLO("/home/allen/icuas24_ws_mini/src/airo_detection/scripts/detect_fruit_test/demo_data/best.pt")
+        self.yolo_model = YOLO("/root/lala_ws/src/icuas24_finals/airo_detection/scripts/detect_fruit_test/demo_data/best.pt")
 
 
         # ROS node and subscriber
@@ -218,7 +218,7 @@ class LidarReprojector:
                 return
             else:
                 # fruit_depth1 = fruit_depth1
-                fruit_depth = fruit_depth1 * 0.5 + fruit_depth2 * 0.5
+                fruit_depth = fruit_depth1 * 0.2 + fruit_depth2 * 0.8
           
             # XYZ_yellow = self.transform_utils.uvd_to_world(fruit_point.x, fruit_point.y, fruit_depth, odom_msg)
             
@@ -380,8 +380,9 @@ class LidarReprojector:
         points_arr = list(point)
         points_arr = np.array(points_arr)
         points_arr = points_arr[points_arr[:, 0] >= 1]
-        points_arr = points_arr[points_arr[:, 1] <3]
-        points_arr = points_arr[points_arr[:, 1] >-3]
+        # points_arr = points_arr[points_arr[:, 0] <= 7]
+        points_arr = points_arr[points_arr[:, 1] <2.5]
+        points_arr = points_arr[points_arr[:, 1] >-2.5]
 
         # Get the size of the list
         num_points = len(points_arr)
@@ -397,9 +398,9 @@ class LidarReprojector:
         # Check the shape of points_arr
         print(f"the size of points_arr before filter by xyz is: {points_arr.shape}")
         
-        points_arr = points_arr[points_arr[:, 0] >= 1]
-        points_arr = points_arr[points_arr[:, 1] <10]
-        points_arr = points_arr[-10< points_arr[:, 1]]
+        # points_arr = points_arr[points_arr[:, 0] >= 1]
+        # points_arr = points_arr[points_arr[:, 1] <10]
+        # points_arr = points_arr[-10< points_arr[:, 1]]
 
         return np.array(points_arr)     
     
@@ -461,7 +462,7 @@ class LidarReprojector:
             return
         else:
             pass
-        if((fruit_depth*fruit_size)>70)or((fruit_depth*fruit_size)<20):
+        if((fruit_depth*fruit_size)>72)or((fruit_depth*fruit_size)<28):
             print(f"fruit_depth*fruit_size>75, return false")
             fruit_depth = False
 
@@ -504,7 +505,7 @@ class LidarReprojector:
             return
         else:
             pass
-        if((fruit_depth*fruit_size)>70)or((fruit_depth*fruit_size)<25):
+        if((fruit_depth*fruit_size)>70)or((fruit_depth*fruit_size)<35):# bag4 70 35
             print(f"fruit_depth*fruit_size>70, return false")
             fruit_depth = False
 
@@ -752,7 +753,7 @@ class LidarReprojector:
         # Draw the bounding box
         cv2.rectangle(image, (x1, y1), (x1+w, y1+h), (0, 0, 255), 2)
         # Add a text label with a background color
-        label = "Red"+str(red_id)
+        label = "Red"+str(red_id - 100)
         font = cv2.FONT_HERSHEY_SIMPLEX
         font_scale = 0.6
         thickness = 2
