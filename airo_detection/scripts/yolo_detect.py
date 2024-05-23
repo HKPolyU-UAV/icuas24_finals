@@ -3,7 +3,8 @@ import sys, os
 import cv2
 import numpy as np
 from geometry_msgs.msg import Point
-
+import torch
+from ultralytics import YOLO
 yolo_test_path = os.path.dirname(__file__)
 sys.path.append(yolo_test_path)
 # Create a new YOLO model from scratch
@@ -12,7 +13,7 @@ print(f"before we load the model and the image\n\n")
 # Load a pretrained YOLO model (recommended for training)
 # Load a pretrained YOLO model (recommended for training)/home/allen/icuas24_ws_mini/src/airo_detection/scripts/last_yolo.pt
 
-model = YOLO("/home/allen/icuas24_ws_mini/src/airo_detection/scripts/detect_fruit_test/demo_data/last.pt")
+# model = YOLO("/home/allen/icuas24_ws_mini/src/airo_detection/scripts/detect_fruit_test/demo_data/last.pt")
 
 
 # Load the image
@@ -21,11 +22,12 @@ model = YOLO("/home/allen/icuas24_ws_mini/src/airo_detection/scripts/detect_frui
 # Perform object detection on the image using the model
 
 def yolo_detect(image, model):
+    # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     print("yolo_detect() called")
     # Process results list
     yolo_fruit_yellows = []
     yolo_fruit_reds = []
-    results = model(image)
+    results = model(image)#.to(device=device)
     for result in results:
         boxes = result.boxes  # Boxes object for bounding box outputs
         class_indices = boxes.cls  # Class indices of each detected object
@@ -40,14 +42,14 @@ def yolo_detect(image, model):
             print(f"Class: {class_name}")
             print(f"class index is: {class_index}")
             print(f"Confidence: {confidence:.2f}")
-            if(class_name == "yellow"):
+            if(class_name == "yellow" and confidence > 0.5):
                 print("yolo detect one yellow")
                 point = Point()
                 point.x = float(xywh[0])
                 point.y = float(xywh[1])
                 point.z = float((xywh[2]+xywh[3])/2)
                 yolo_fruit_yellows.append(point)
-            if(class_name == "red"):
+            if(class_name == "red"  and confidence > 0.5):
                 print("yolo detect one red")
                 point = Point()
                 point.x = float(xywh[0])
@@ -59,4 +61,3 @@ def yolo_detect(image, model):
     # print(f"=======================================================")
     # result.show()  # display to screen
     # result.save(filename="result.jpg")  # save to disk
-
