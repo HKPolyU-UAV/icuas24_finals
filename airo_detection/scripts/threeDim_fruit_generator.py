@@ -126,6 +126,19 @@ class LidarReprojector:
         self.min_red_size = 10
         self.max_red_size = 10
 
+        self.last_odom = Odometry()
+        self.last_odom.pose.pose.position = Point(0, 0, 0)
+        self.curr_odom = Odometry()
+        self.path_length = 0.0
+        self.roll = 0.0
+        self.pitch = 0.0
+
+
+        self.font = cv2.FONT_HERSHEY_SIMPLEX
+        self.font_scale = 1
+        self.color_y = (0, 255, 255)  # BGR color for blue
+        self.color_r = (0, 0, 255)  # BGR color for blue
+
 
     def callback(self, image_msg, lidar_msg, odom_msg):
         print(f"\n\n=============================the time we entered callback is :{time.time()}")
@@ -133,15 +146,17 @@ class LidarReprojector:
         print(f"the time gap lidar_time-image_time is: ======================{time_gap:.3f}")
         print(f"good lidar and image match, airo detection here")
         print(f"we have poped all three msgs for processing, for fruit generation")
-
+        
         rpy_deg = odom_msg_to_rpy(odom_msg)
+        self.roll = rpy_deg[0]
+        self.pitch = rpy_deg[1]
         print(f"rpy_deg is : {rpy_deg}")
-        if(abs(rpy_deg[0]) > 4.4):
+        if(abs(self.roll) > 4.4):
         # if(abs(rpy_deg[0]) > 6.5):
             print(f"roll is {rpy_deg[0]}, too large, we NOT generate 3D fruit in this frame")
             print(f"return of this callback function")
             return
-        if(abs(rpy_deg[1]) > 4.4):
+        if(abs(self.pitch) > 4.4):
         # if(abs(rpy_deg[0]) > 6.5):
             print(f"pitch is {rpy_deg[0]}, too large, we NOT generate 3D fruit in this frame")
             print(f"return of this callback function")
@@ -176,16 +191,21 @@ class LidarReprojector:
             uvd_fruits = self.fruit_markers_to_uvd(odom_msg)
             image = self.colorize_fruits_uvd(uvd_fruits, image)
 
-        image_with_lidar_points, image_mean_depth = self.colorize_uvd_visualization(uvd_points, image)  #colored_image_points only for visualization, could delete
-        if (image_mean_depth<6.8):
+        image_with_lidar_points, image_mean_depth, middle_image_mean_depth = self.colorize_uvd_visualization(uvd_points, image)  #colored_image_points only for visualization, could delete
+        if (middle_image_mean_depth<4.4):
             # @TODO 1 fit gaussian
             # @TODO 2 in find fruit_depth, find fruit depth with gaussian
-            print(f"image_mean_depth is {image_mean_depth}, we should do gaussian fitting here")
+            print(f"middle_image_mean_depth is {middle_image_mean_depth}, we should do gaussian fitting here")
             means = self.calculate_gaussian(uvd_points, odom_msg)  #
             print(f"the depth means are {means}")
         else:
             means = self.calculate_gaussian(uvd_points, odom_msg)  #
             print(f"image_mean_depth is {image_mean_depth}, no gaussian fitting")
+        
+        means0 = "depth_mean0: "+ str(means[0])        
+        means1 = "depth_mean1: "+ str(means[1])
+        cv2.putText(image_with_lidar_points, means0, (30,50), self.font, self.font_scale, self.color_y, thickness=2)
+        cv2.putText(image_with_lidar_points, means1, (30,80), self.font, self.font_scale, self.color_y, thickness=2)
 
         self.add_yellow_fruits_from_yolo_detection(image_mean_depth, means, yolo_fruit_yellows, "yellow", uvd_points, image_with_lidar_points, odom_msg, image_fruit_detections)
         self.add_red_fruits_from_yolo_detection(image_mean_depth, means, yolo_fruit_reds, "red", uvd_points, image_with_lidar_points, odom_msg, image_fruit_detections)
@@ -194,9 +214,18 @@ class LidarReprojector:
         colored_image_msg.header = odom_msg.header
         self.lidar_projected_image_pub.publish(colored_image_msg)
 
-
+        self.calculate_path_length_3d()
+        self.last_odom = self.curr_odom
+        self.curr_odom = odom_msg
         # image.clear()
         # uvd_points.clear()
+
+    def calculate_path_length_3d(self):
+        dx = self.curr_odom.pose.pose.position.x - self.last_odom.pose.pose.position.x
+        dy = self.curr_odom.pose.pose.position.y - self.last_odom.pose.pose.position.y
+        dz = self.curr_odom.pose.pose.position.z - self.last_odom.pose.pose.position.z
+        self.path_length += (dx**2 + dy**2 + dz**2)**0.5
+        return self.path_length
 
     # def fruit_reprojection(self, fruit_XYZ_world):
     #     fruit_XYZ_lidar = self.transform_utils.Tlidar_world(fruit_XYZ_world)
@@ -213,10 +242,21 @@ class LidarReprojector:
             image_with_lidar_points = self.draw_bbx(image_with_lidar_points, color, int(fruit_point.x),int(fruit_point.y), int(fruit_point.z))
 
             # fruit_point.z = fruit_point.z
-            fruit_depth1 = self.find_yellow_fruit_depth(uvd_points, fruit_point)
+            fruit_depth1, knn_points = self.find_yellow_fruit_depth(uvd_points, fruit_point)
             fruit_depth2 = self.find_yolo_yellow_depth(float(fruit_point.z))
             print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++",fruit_depth1)
             print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++",fruit_depth2)
+            for i in range(0,len(knn_points)):
+                # Draw the line
+                p = knn_points
+                cv2.line(image_with_lidar_points, (int(p[i][0]), int(p[i][1])), (int(fruit_point.x), int(fruit_point.y)), (0,255,255), 2)
+            position1 = (int(fruit_point.x+20), int(fruit_point.y)-20) 
+            position2 = (int(fruit_point.x+20), int(fruit_point.y)+20) 
+            dpeth_str1 = str(fruit_depth1)
+            cv2.putText(image_with_lidar_points, dpeth_str1, position1, self.font, self.font_scale, self.color_y, thickness=2)
+            dpeth_str2 = str(fruit_depth2)
+            cv2.putText(image_with_lidar_points, dpeth_str2, position2, self.font, self.font_scale, self.color_y, thickness=2)
+
             if(fruit_depth1 == None)or(fruit_depth1 == False):
                 fruit_depth = fruit_depth1
                 print('we have return here add_yellow_fruits_from_yolo_detection')
@@ -277,12 +317,22 @@ class LidarReprojector:
             image_with_lidar_points = self.draw_bbx(image_with_lidar_points, color, int(fruit_point.x),int(fruit_point.y), int(fruit_point.z))
 
             # fruit_point.z = fruit_point.z
-            # fruit_depth = self.find_red_fruit_depth(uvd_points, fruit_point)
             # fruit_depth = self.find_yolo_fruit_depth(float(fruit_point.z))
-            fruit_depth1 = self.find_red_fruit_depth(uvd_points, fruit_point)
+            fruit_depth1, knn_points = self.find_red_fruit_depth(uvd_points, fruit_point)
             fruit_depth2 = self.find_yolo_red_depth(float(fruit_point.z))
             print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++",fruit_depth1)
             print("++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++",fruit_depth2)
+            for i in range(0,len(knn_points)):
+                # Draw the line
+                p = knn_points
+                cv2.line(image_with_lidar_points, (int(p[i][0]), int(p[i][1])), (int(fruit_point.x), int(fruit_point.y)), (0,0,255), 2)
+            position1 = (int(fruit_point.x+20), int(fruit_point.y)-20) 
+            position2 = (int(fruit_point.x+20), int(fruit_point.y)+20) 
+            dpeth_str1 = str(fruit_depth1)
+            cv2.putText(image_with_lidar_points, dpeth_str1, position1, self.font, self.font_scale, self.color_r, thickness=2)
+            dpeth_str2 = str(fruit_depth2)
+            cv2.putText(image_with_lidar_points, dpeth_str2, position2, self.font, self.font_scale, self.color_y, thickness=2)
+
             if(fruit_depth1 == None)or(fruit_depth1 == False):
                 fruit_depth = fruit_depth1
                 print('we have return here add_red_fruits_from_yolo_detection')
@@ -329,6 +379,7 @@ class LidarReprojector:
                 self.fruit_detections_pub.publish(fruit_detections_image_msg)
 
                 self.fruit_database.publish_markers()
+                cv2.putText(image_with_lidar_points, 'ADD ONE FRUIT', position, font, font_scale, color_g, thickness=2)
                 cv2.putText(image_with_lidar_points, 'ADD ONE FRUIT', position, font, font_scale, color_g, thickness=2)
 
 
@@ -414,17 +465,17 @@ class LidarReprojector:
             self.min_red_size = fruit_size
         if(fruit_size > self.max_red_size):
             self.max_red_size = fruit_size
-        print(f"the min yellow size is: {self.min_yellow_size}")
-        print(f"the max yellow size is: {self.max_yellow_size}")
+        print(f"the min red size is: {self.min_red_size}")
+        print(f"the max red size is: {self.max_red_size}")
 
 
         knn_points_noOutlier = self.remove_outliers(knn_points)
         weighted_depth, depth_mean, depth_var = self.find_depth_mean_var(knn_points_noOutlier, fruit_point)
         print(f"mean of depth is: {depth_mean};\nVariance of depth is: {depth_var}")
         print(f"mean of weighted_depth is: {weighted_depth};\nVariance of depth is: {depth_var}")
-        if((depth_var/fruit_size) > 0.88):
+        if((depth_var/fruit_size) > 0.66):
             print(f"the dpeth_var is {depth_var}/{fruit_size} = {depth_var/fruit_size}, TOO LARGE, return")
-            return False
+            return False, knn_points_noOutlier
         else:
             fruit_depth = depth_mean
             fruit_depth = weighted_depth
@@ -433,21 +484,19 @@ class LidarReprojector:
         has_valid_depth = self.check_knn_dist(knn_points_noOutlier, fruit_point)
         if(not has_valid_depth):
             fruit_depth = False
-            return
+            return False, knn_points_noOutlier
         else:
             pass
         if((fruit_depth*fruit_size)>72)or((fruit_depth*fruit_size)<28):
             print(f"fruit_depth*fruit_size>75, return false")
             fruit_depth = False
-
        
+        # d3size = fruit_size*(fruit_depth**3)
+        # if(d3size > 2500):
+        #     print(f"fruit_size*(fruit_depth**3) is {d3size} > 2500, return false")
+        #     fruit_depth = False
 
-        d3size = fruit_size*(fruit_depth**3)
-        if(d3size > 2500):
-            print(f"fruit_size*(fruit_depth**3) is {d3size} > 2500, return false")
-            fruit_depth = False
-
-        return fruit_depth
+        return fruit_depth, knn_points_noOutlier
     
     def find_yellow_fruit_depth(self, uvd_points, fruit_point):
         # Calculate the Manhattan distance between each point in uvd_points and fruit_point
@@ -465,9 +514,9 @@ class LidarReprojector:
         weighted_depth, depth_mean, depth_var = self.find_depth_mean_var(knn_points_noOutlier, fruit_point)
         print(f"mean of depth is: {depth_mean};\nVariance of depth is: {depth_var}")
         print(f"mean of weighted_depth is: {weighted_depth};\nVariance of depth is: {depth_var}")
-        if((depth_var/fruit_size) > 0.88):
+        if((depth_var/fruit_size) > 0.66):
             print(f"the dpeth_var is {depth_var}/{fruit_size} = {depth_var/fruit_size}, TOO LARGE, return")
-            return False
+            return False, knn_points_noOutlier
         else:
             fruit_depth = depth_mean
             fruit_depth = weighted_depth
@@ -476,19 +525,19 @@ class LidarReprojector:
         has_valid_depth = self.check_knn_dist(knn_points_noOutlier, fruit_point)
         if(not has_valid_depth):
             fruit_depth = False
-            return
+            return False, knn_points_noOutlier
         else:
             pass
-        if((fruit_depth*fruit_size)>70)or((fruit_depth*fruit_size)<35):# bag4 70 35
-            print(f"fruit_depth*fruit_size>70, return false")
-            fruit_depth = False
+        # if((fruit_depth*fruit_size)>70)or((fruit_depth*fruit_size)<35):# bag4 70 35
+        #     print(f"fruit_depth*fruit_size>70, return false")
+        #     fruit_depth = False
 
-        return fruit_depth
+        return fruit_depth, knn_points_noOutlier
     
     def check_knn_dist(self, knn_points, fruit_point):
         fruit_size = int(fruit_point.z)
         distances = np.sqrt((knn_points[:, 0] - fruit_point.x)**2 + (knn_points[:, 1] - fruit_point.y)**2)
-        if(distances[0] > (fruit_size*0.7)):
+        if(distances[0] > (fruit_size*0.6)):
             print(f"\ndistance[0] is {distances[0]}, larger than fruit_size*0.6->{(fruit_size*0.6)}, False")
             return False
         else:
@@ -592,10 +641,14 @@ class LidarReprojector:
         # Apply the mask to the uvd_points array to get the filtered array
         filtered_uvd_points = uvd_points[mask]
         filtered_z_values = filtered_uvd_points[:, 2]
+        image_mean_depth = np.mean(filtered_z_values)
         # # Get the first column of uvd_points
         # first_column = uvd_points[:, 0]
 
-        image_mean_depth = np.mean(filtered_z_values)
+        middle_u_mask = (uvd_points[:, 0] >= 300) & (uvd_points[:, 0] <= 380)  #changed but not tested
+        middle_filtered_uvd_points = uvd_points[middle_u_mask]
+        middle_filtered_z_values = middle_filtered_uvd_points[:, 2]
+        middle_image_mean_depth = np.mean(middle_filtered_z_values)
         # print(f"the fov_mean_depth is:{image_mean_depth}")
         # Clip the z_values to the range [3, 8]
         z_values = uvd_points[:,2]
@@ -618,6 +671,19 @@ class LidarReprojector:
         # 画出分割线
         width_step = 100
         height_step = 100
+        font = cv2.FONT_HERSHEY_SIMPLEX
+        font_scale = 0.6
+        thickness = 2
+
+        path_length_str = "path_length: " + str(self.path_length)
+        cv2.putText(image, path_length_str,(300, 50), font, font_scale, (0,0,0), thickness)
+        str_middle_image_mean_depth = "300-380 depth: " + str(middle_image_mean_depth)
+        cv2.putText(image, str_middle_image_mean_depth,(300, 80), font, font_scale, (0,0,0), thickness)
+        str_roll = "roll: " + str(self.roll)
+        cv2.putText(image, str_roll,(300, 120), font, font_scale, (0,0,0), thickness)
+        str_roll = "picth: " + str(self.pitch)
+        cv2.putText(image, str_roll,(300, 150), font, font_scale, (0,0,0), thickness)
+
         # 中轴十字线
         cv2.line(image, (320, 0), (320, image.shape[0]), (255, 255, 50), 2)
         cv2.line(image, (0, 240), (640, 240), (255, 255, 50), 2)
@@ -625,7 +691,7 @@ class LidarReprojector:
             cv2.line(image, (i * width_step, 0), (i * width_step, image.shape[0]), (255, 255, 255), 1)
             cv2.line(image, (0, i * height_step), (image.shape[1], i * height_step), (255, 255, 255), 1)
 
-        return image, image_mean_depth
+        return image, image_mean_depth, middle_image_mean_depth
     
     def fruit_markers_to_uvd(self, odom_msg):
         print("fruit_markers_to_uvd() called")
@@ -633,8 +699,9 @@ class LidarReprojector:
         # Initialize an empty list to hold the marker positions
         worldXYZ_fruit = np.empty((0,3))
         print("=================yellow_fruits===========================")
+        print(f"the len(self.yellow_fruit_arr_.markers is {len(self.fruit_database.yellow_fruit_arr_.markers)})")
         print(f"=================yellow_prob_mean is {self.fruit_database.yellow_prob_mean}===========================")
-        for i in range(1,len(self.fruit_database.yellow_fruit_arr_.markers)):
+        for i in range(0,len(self.fruit_database.yellow_fruit_arr_.markers)):
             marker = self.fruit_database.yellow_fruit_arr_.markers[i]
             marker_position = marker.pose.position
             new_fruit = np.array([float(marker_position.x), marker_position.y, marker_position.z])
@@ -643,8 +710,9 @@ class LidarReprojector:
             worldXYZ_fruit = np.append(worldXYZ_fruit, [new_fruit], axis=0)
         
         print("===================red_fruits===========================")
+        print(f"the len(self.red_fruit_arr_.markers is {len(self.fruit_database.red_fruit_arr_.markers)})")
         print(f"====================red_prob_mean is {self.fruit_database.red_prob_mean}===========================")
-        for i in range(1,len(self.fruit_database.red_fruit_arr_.markers)):
+        for i in range(0,len(self.fruit_database.red_fruit_arr_.markers)):
             marker = self.fruit_database.red_fruit_arr_.markers[i]
             marker_position = marker.pose.position
             new_fruit = np.array([float(marker_position.x), marker_position.y, marker_position.z])
