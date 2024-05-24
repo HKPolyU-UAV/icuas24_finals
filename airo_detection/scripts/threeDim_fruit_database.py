@@ -29,6 +29,7 @@ class PlantFruitDatabase:
         self.red_fruit_pub = rospy.Publisher("/red_fruit_arr_", MarkerArray, queue_size=10)
         self.red_fruit_count_pub = rospy.Publisher('/red_fruit_count', Int32, queue_size=10, latch=True)
         self.red_fruit_arr_ = MarkerArray()
+        self.red_fruit_list_ =[]
         self.yellow_fruit_pub = rospy.Publisher("/yellow_fruit_arr_", MarkerArray, queue_size=10)
         self.yellow_fruit_count_pub = rospy.Publisher('/yellow_fruit_count', Int32, queue_size=10, latch=True)
         self.yellow_fruit_arr_ = MarkerArray()
@@ -36,7 +37,16 @@ class PlantFruitDatabase:
         self.real_red_fruit_arr_ = []
 
         self.red_dist = 1.1
-        self.yellow_dist = 1.0
+        self.red_max_prob = 0.3
+        self.red_2nd_max_prob = 0.3
+        self.red_3rd_max_prob = 0.3
+        self.red_prob_mean = 0.1
+
+        self.yellow_dist = 1.1
+        self.yellow_max_prob = 0.3
+        self.yellow_2nd_max_prob = 0.3
+        self.yellow_3rd_max_prob = 0.3
+        self.yellow_prob_mean = 0.1
 
     def add_red_fruit_marker(self, fruit_color, fruit_id, position, rpy_roll, two_d_size):
         print(f"add_red_fruit_marker() called, the pose is\n{position}")
@@ -49,7 +59,7 @@ class PlantFruitDatabase:
         marker.scale.x = fruit_size
         marker.scale.y = fruit_size
         marker.scale.z = fruit_size
-        marker.color.a = 0.2
+        marker.color.a = 0.1
         if(np.isnan(position[0]) or np.isnan(position[1]) or np.isnan(position[2])):
             print("fruit pose isnan, return")
             return
@@ -66,35 +76,49 @@ class PlantFruitDatabase:
         self.real_red_fruit_arr_.clear()
         this_id = 0
         half_count = 0
+        closest_old_marker_id = 150
+        closest_old_marker_dist = 10
+
         for i in range(0,len(self.red_fruit_arr_.markers)):
             old_marker = self.red_fruit_arr_.markers[i]
+            self.red_prob_mean = (self.red_prob_mean + old_marker.color.a)/2
+            if(old_marker.color.a > self.red_max_prob):
+                self.red_max_prob = old_marker.color.a
+            if(old_marker.color.a > self.red_2nd_max_prob and old_marker.color.a < self.red_max_prob):
+                self.red_2nd_max_prob = old_marker.color.a
+            if(old_marker.color.a > self.red_3rd_max_prob and old_marker.color.a < self.red_2nd_max_prob):
+                self.red_3rd_max_prob = old_marker.color.a
             dist = calc_marker_dist(old_marker, marker)
-
-            if (dist <= self.red_dist):
-                print("duplicate red_fruit by 3D dist, IIR and return")
-                old_marker.pose.position.x = (rpy_roll*old_marker.pose.position.x + marker.pose.position.x)/(rpy_roll+1)
-                old_marker.pose.position.y = (rpy_roll*old_marker.pose.position.y + marker.pose.position.y)/(rpy_roll+1)
-                old_marker.pose.position.z = (rpy_roll*old_marker.pose.position.z + marker.pose.position.z)/(rpy_roll+1)
-                old_marker.color.a = old_marker.color.a + 0.2
-                old_marker.scale.x = (3*old_marker.scale.x + fruit_size)/4
-                old_marker.scale.y = (3*old_marker.scale.y + fruit_size)/4
-                old_marker.scale.z = (3*old_marker.scale.z + fruit_size)/4
-                # self.red_fruit_count_pub.publish(i+1)
-                this_id = i+1
-
-            if(old_marker.color.a >= 1):
+            if (dist <= closest_old_marker_dist):
+                closest_old_marker_dist = dist
+                closest_old_marker_id = i
+            if(old_marker.color.a > max(0.3, (self.red_prob_mean/2))):
                 self.real_red_fruit_arr_.append(1)
-            elif(0.4 <= old_marker.color.a < 1):
-                half_count = half_count+0.5
-            elif(old_marker.color.a < 0.4):
-                print("new fruit, not take into account")
+            elif(old_marker.color.a <= max(0.3, (self.red_prob_mean/5))):
+                half_count = half_count+0.2
+        # endfor
+        if(closest_old_marker_dist < self.red_dist):
+            print("the closest fruit is the {closest_old_marker_id}th red with dist = {closest_old_marker_dist}")
+            old_marker = self.red_fruit_arr_.markers[closest_old_marker_id]
+            print("duplicate red_fruit by 3D dist, IIR and return")
+            old_marker.pose.position.x = (rpy_roll*old_marker.pose.position.x + marker.pose.position.x)/(rpy_roll+1)
+            old_marker.pose.position.y = (rpy_roll*old_marker.pose.position.y + marker.pose.position.y)/(rpy_roll+1)
+            old_marker.pose.position.z = (rpy_roll*old_marker.pose.position.z + marker.pose.position.z)/(rpy_roll+1)
+            old_marker.color.a = old_marker.color.a + 0.1
+            old_marker.scale.x = (3*old_marker.scale.x + fruit_size)/4
+            old_marker.scale.y = (3*old_marker.scale.y + fruit_size)/4
+            old_marker.scale.z = (3*old_marker.scale.z + fruit_size)/4
+            # self.red_fruit_count_pub.publish(i+1)
+            print(f"red_id by IIR is: {closest_old_marker_id+1}, start from 1, NOT 0")
+            this_id = closest_old_marker_id+1
         # if it's a new red
         marker.color.r = 1.0
         marker.color.g = 0.0
         marker.color.b = 0.0
         if(this_id == 0):
             self.red_fruit_arr_.markers.append(marker)
-        new_red_id = len(self.red_fruit_arr_.markers)
+            # self.red_fruit_list_.append(marker)
+        # new_red_id = len(self.red_fruit_arr_.markers)
         self.red_fruit_count_pub.publish(len(self.real_red_fruit_arr_)+ int(half_count/2))
         if(this_id > len(self.real_red_fruit_arr_) or this_id==0):
             this_id = len(self.real_red_fruit_arr_)
@@ -111,7 +135,7 @@ class PlantFruitDatabase:
         marker.scale.x = fruit_size
         marker.scale.y = fruit_size
         marker.scale.z = fruit_size
-        marker.color.a = 0.3
+        marker.color.a = 0.1
         if(np.isnan(position[0]) or np.isnan(position[1]) or np.isnan(position[2])):
             print("fruit pose isnan, return")
             return
@@ -129,36 +153,55 @@ class PlantFruitDatabase:
         self.real_yellow_fruit_arr_.clear()
         this_id = 0
         half_count = 0
+        closest_old_marker_id = 50
+        closest_old_marker_dist = 10
+        
         for i in range(0,len(self.yellow_fruit_arr_.markers)):
             old_marker = self.yellow_fruit_arr_.markers[i]
+            self.yellow_prob_mean = (self.yellow_prob_mean + old_marker.color.a)/2
+            if(old_marker.color.a > self.yellow_max_prob):
+                self.yellow_max_prob = old_marker.color.a
+            if(old_marker.color.a > self.yellow_2nd_max_prob and old_marker.color.a < self.yellow_max_prob):
+                self.yellow_2nd_max_prob = old_marker.color.a
+            if(old_marker.color.a > self.yellow_3rd_max_prob and old_marker.color.a < self.yellow_2nd_max_prob):
+                self.yellow_3rd_max_prob = old_marker.color.a
             dist = calc_marker_dist(old_marker, marker)
-            if (dist <= self.yellow_dist):
-                print("duplicate yellow_fruit by 3D dist, IIR and return")
-                old_marker.pose.position.x = (rpy_roll*old_marker.pose.position.x + marker.pose.position.x)/(rpy_roll+1)
-                old_marker.pose.position.y = (rpy_roll*old_marker.pose.position.y + marker.pose.position.y)/(rpy_roll+1)
-                old_marker.pose.position.z = (rpy_roll*old_marker.pose.position.z + marker.pose.position.z)/(rpy_roll+1)
-                old_marker.color.a = old_marker.color.a + 0.3
-                old_marker.scale.x = (3*old_marker.scale.x + fruit_size)/4
-                old_marker.scale.y = (3*old_marker.scale.y + fruit_size)/4
-                old_marker.scale.z = (3*old_marker.scale.z + fruit_size)/4
-                # self.yellow_fruit_count_pub.publish(i+1)
-                print(f"yellow_id by IIR is: {i+1}, start from 1, NOT 0")
-                this_id = i+1
-            if(old_marker.color.a > 0.5):
+            if (dist <= closest_old_marker_dist):
+                closest_old_marker_dist = dist
+                closest_old_marker_id = i
+            if(old_marker.color.a > max(0.3, (self.yellow_prob_mean/2))):
                 self.real_yellow_fruit_arr_.append(1)
-            elif(0.2 < old_marker.color.a < 0.5):
-                half_count = half_count+0.6
+            elif(old_marker.color.a <= max(0.3, (self.yellow_prob_mean /5))):
+                half_count = half_count+0.2
+            # elif(old_marker.color.a <= max(0.2, (self.yellow_prob_mean /10))):
+            #     half_count = half_count+0.01
             # elif(old_marker.color.a == 0.3):
             #     print(f"real_yellow_fruit_arr_: {self.real_yellow_fruit_arr_}")
+        # endfor
+                
+        if(closest_old_marker_dist < self.yellow_dist):
+            print("the closest fruit is the {closest_old_marker_id}th yellow with dist = {closest_old_marker_dist}")
+            old_marker = self.yellow_fruit_arr_.markers[closest_old_marker_id]
+            print("duplicate yellow_fruit by 3D dist, IIR and return")
+            old_marker.pose.position.x = (rpy_roll*old_marker.pose.position.x + marker.pose.position.x)/(rpy_roll+1)
+            old_marker.pose.position.y = (rpy_roll*old_marker.pose.position.y + marker.pose.position.y)/(rpy_roll+1)
+            old_marker.pose.position.z = (rpy_roll*old_marker.pose.position.z + marker.pose.position.z)/(rpy_roll+1)
+            old_marker.color.a = old_marker.color.a + 0.1
+            old_marker.scale.x = (3*old_marker.scale.x + fruit_size)/4
+            old_marker.scale.y = (3*old_marker.scale.y + fruit_size)/4
+            old_marker.scale.z = (3*old_marker.scale.z + fruit_size)/4
+            # self.yellow_fruit_count_pub.publish(i+1)
+            print(f"yellow_id by IIR is: {closest_old_marker_id+1}, start from 1, NOT 0")
+            this_id = closest_old_marker_id+1
         # if it's a new yellow
         marker.color.r = 1.0
         marker.color.g = 1.0
         marker.color.b = 0.0
         if(this_id == 0):
             self.yellow_fruit_arr_.markers.append(marker)
-        new_yellow_id = len(self.yellow_fruit_arr_.markers)
+        # new_yellow_id = len(self.yellow_fruit_arr_.markers)
         self.yellow_fruit_count_pub.publish(len(self.real_yellow_fruit_arr_)+int(half_count/2))
-        print(f"new_yellow_id is: {new_yellow_id}")
+        # print(f"new_yellow_id is: {new_yellow_id}")
         if(this_id > len(self.real_yellow_fruit_arr_) or this_id==0):
             this_id = len(self.real_yellow_fruit_arr_)
         return this_id
