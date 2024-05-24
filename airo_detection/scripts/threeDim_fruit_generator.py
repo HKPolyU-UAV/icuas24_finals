@@ -141,6 +141,11 @@ class LidarReprojector:
             print(f"roll is {rpy_deg[0]}, too large, we NOT generate 3D fruit in this frame")
             print(f"return of this callback function")
             return
+        if(abs(rpy_deg[1]) > 4.4):
+        # if(abs(rpy_deg[0]) > 6.5):
+            print(f"pitch is {rpy_deg[0]}, too large, we NOT generate 3D fruit in this frame")
+            print(f"return of this callback function")
+            return
         
         # print("we are inside the callback now")
         self.publish_camera_fov_marker(odom_msg)
@@ -327,41 +332,10 @@ class LidarReprojector:
                 cv2.putText(image_with_lidar_points, 'ADD ONE FRUIT', position, font, font_scale, color_g, thickness=2)
 
 
-    def filter_lidar_msg(self, lidar_msg):
-        # 解码原始的点云数据
-        point_cloud = point_cloud2.read_points(lidar_msg, field_names=("x", "y", "z"), skip_nans=True)
-
-        # 创建一个新的点云列表来存储满足条件的点
-        new_point_cloud = []
-
-        for point in point_cloud:
-            x, y, z = point
-            # 检查点是否满足条件
-            if 1 < x < 7.5 and -1.5 < y < 1.5:
-                new_point_cloud.append([x, y, z])
-
-        # 创建一个新的PointCloud2消息
-        new_lidar_msg = PointCloud2()
-        new_lidar_msg.header = lidar_msg.header
-        new_lidar_msg.height = 1
-        new_lidar_msg.width = len(new_point_cloud)
-        new_lidar_msg.fields = [
-            PointField(name='x', offset=0, datatype=PointField.FLOAT32, count=1),
-            PointField(name='y', offset=4, datatype=PointField.FLOAT32, count=1),
-            PointField(name='z', offset=8, datatype=PointField.FLOAT32, count=1)
-        ]
-        new_lidar_msg.is_bigendian = False
-        new_lidar_msg.point_step = 12
-        new_lidar_msg.row_step = new_lidar_msg.point_step * new_lidar_msg.width
-        new_lidar_msg.is_dense = int(np.isfinite(new_point_cloud).all())
-        new_lidar_msg.data = np.asarray(new_point_cloud, np.float32).tostring()
-
-        return new_lidar_msg
-
     def calculate_gaussian(self, uvd_points, odom_msg):
         # Create histogram
         data = uvd_points[:,2]
-        data = np.clip(data, 1.2, 12)
+        data = np.clip(data, 1, 12)
 
         # Fit a Gaussian Mixture Model with two components
         gmm = GaussianMixture(n_components=2, random_state=0).fit(data.reshape(-1, 1))
@@ -380,7 +354,7 @@ class LidarReprojector:
         points_arr = list(point)
         points_arr = np.array(points_arr)
         points_arr = points_arr[points_arr[:, 0] >= 1]
-        # points_arr = points_arr[points_arr[:, 0] <= 7]
+        points_arr = points_arr[points_arr[:, 0] <= 7.5]
         points_arr = points_arr[points_arr[:, 1] <2.5]
         points_arr = points_arr[points_arr[:, 1] >-2.5]
 
@@ -659,17 +633,22 @@ class LidarReprojector:
         # Initialize an empty list to hold the marker positions
         worldXYZ_fruit = np.empty((0,3))
         print("=================yellow_fruits===========================")
-        for marker in self.fruit_database.yellow_fruit_arr_.markers:
+        print(f"=================yellow_prob_mean is {self.fruit_database.yellow_prob_mean}===========================")
+        for i in range(1,len(self.fruit_database.yellow_fruit_arr_.markers)):
+            marker = self.fruit_database.yellow_fruit_arr_.markers[i]
             marker_position = marker.pose.position
             new_fruit = np.array([float(marker_position.x), marker_position.y, marker_position.z])
-            print(f"marker position is ({new_fruit}), the prob is {marker.color.a}")
+            print(f"{i}th marker position is ({new_fruit}), the prob is {marker.color.a}")
             # Append the marker's position to the list
             worldXYZ_fruit = np.append(worldXYZ_fruit, [new_fruit], axis=0)
+        
         print("===================red_fruits===========================")
-        for marker in self.fruit_database.red_fruit_arr_.markers:
+        print(f"====================red_prob_mean is {self.fruit_database.red_prob_mean}===========================")
+        for i in range(1,len(self.fruit_database.red_fruit_arr_.markers)):
+            marker = self.fruit_database.red_fruit_arr_.markers[i]
             marker_position = marker.pose.position
             new_fruit = np.array([float(marker_position.x), marker_position.y, marker_position.z])
-            print(f"marker poistion is ({new_fruit}), the prob is {marker.color.a}")
+            print(f"{i}th marker poistion is ({new_fruit}), the prob is {marker.color.a}")
             # Append the marker's position to the list
             worldXYZ_fruit = np.append(worldXYZ_fruit, [new_fruit], axis=0)
         # print(f"worldXYZ_fruit is:\n{worldXYZ_fruit}")
