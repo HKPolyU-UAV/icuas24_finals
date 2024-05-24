@@ -42,7 +42,7 @@ class PlantFruitDatabase:
         self.red_3rd_max_prob = 0.3
         self.red_prob_mean = 0.1
 
-        self.yellow_dist = 1.1
+        self.yellow_dist = 1.0
         self.yellow_max_prob = 0.3
         self.yellow_2nd_max_prob = 0.3
         self.yellow_3rd_max_prob = 0.3
@@ -64,8 +64,6 @@ class PlantFruitDatabase:
             print("fruit pose isnan, return")
             return
 
-        # position[0] = round(position[0],0)
-
         marker.pose.position.x = position[0]
         marker.pose.position.y = position[1]
         marker.pose.position.z = position[2]
@@ -79,24 +77,38 @@ class PlantFruitDatabase:
         closest_old_marker_id = 150
         closest_old_marker_dist = 10
 
+        new_red_prob_sum = 0
         for i in range(0,len(self.red_fruit_arr_.markers)):
+            print(f"the len(self.red_fruit_arr_.markers is {len(self.red_fruit_arr_.markers)})")
             old_marker = self.red_fruit_arr_.markers[i]
-            self.red_prob_mean = (self.red_prob_mean + old_marker.color.a)/2
-            if(old_marker.color.a > self.red_max_prob):
-                self.red_max_prob = old_marker.color.a
-            if(old_marker.color.a > self.red_2nd_max_prob and old_marker.color.a < self.red_max_prob):
-                self.red_2nd_max_prob = old_marker.color.a
-            if(old_marker.color.a > self.red_3rd_max_prob and old_marker.color.a < self.red_2nd_max_prob):
-                self.red_3rd_max_prob = old_marker.color.a
+            new_red_prob_sum = new_red_prob_sum + old_marker.color.a
+            # if(old_marker.color.a > self.red_max_prob):
+            #     self.red_max_prob = old_marker.color.a
+            # if(old_marker.color.a > self.red_2nd_max_prob and old_marker.color.a < self.red_max_prob):
+            #     self.red_2nd_max_prob = old_marker.color.a
+            # if(old_marker.color.a > self.red_3rd_max_prob and old_marker.color.a < self.red_2nd_max_prob):
+            #     self.red_3rd_max_prob = old_marker.color.a
             dist = calc_marker_dist(old_marker, marker)
             if (dist <= closest_old_marker_dist):
                 closest_old_marker_dist = dist
                 closest_old_marker_id = i
-            if(old_marker.color.a > max(0.3, (self.red_prob_mean/2))):
-                self.real_red_fruit_arr_.append(1)
-            elif(old_marker.color.a <= max(0.3, (self.red_prob_mean/5))):
-                half_count = half_count+0.2
+            if(self.red_prob_mean < 1.7):
+                if(old_marker.color.a > min(0.4, (self.red_prob_mean))):
+                    self.real_red_fruit_arr_.append(1)
+                elif((min(0.4, (self.red_prob_mean))) >= old_marker.color.a >= 0.3):
+                    half_count = half_count+0.5
+                elif(old_marker.color.a < 0.3):
+                    print(f"real_red_fruit_arr_: {self.real_red_fruit_arr_}")
+            else:
+                if(old_marker.color.a > max(0.4, (self.red_prob_mean))):
+                    self.real_red_fruit_arr_.append(1)
+                elif((min(0.4, (self.red_prob_mean))) >= old_marker.color.a >= 0.3):
+                    half_count = half_count+0.5
+                elif(old_marker.color.a < 0.3):
+                    print(f"real_red_fruit_arr_: {self.real_red_fruit_arr_}")
         # endfor
+        new_red_prob_mean = new_red_prob_sum/(len(self.red_fruit_arr_.markers) + 0.3)
+        self.red_prob_mean = new_red_prob_mean
         if(closest_old_marker_dist < self.red_dist):
             print("the closest fruit is the {closest_old_marker_id}th red with dist = {closest_old_marker_dist}")
             old_marker = self.red_fruit_arr_.markers[closest_old_marker_id]
@@ -119,7 +131,7 @@ class PlantFruitDatabase:
             self.red_fruit_arr_.markers.append(marker)
             # self.red_fruit_list_.append(marker)
         # new_red_id = len(self.red_fruit_arr_.markers)
-        self.red_fruit_count_pub.publish(len(self.real_red_fruit_arr_)+ int(half_count/2))
+        self.red_fruit_count_pub.publish(len(self.real_red_fruit_arr_)+ int(half_count))
         if(this_id > len(self.real_red_fruit_arr_) or this_id==0):
             this_id = len(self.real_red_fruit_arr_)
         return this_id
@@ -140,8 +152,6 @@ class PlantFruitDatabase:
             print("fruit pose isnan, return")
             return
 
-        # position[0] = round(position[0],0)
-
         marker.pose.position.x = position[0]
         marker.pose.position.y = position[1]
         marker.pose.position.z = position[2]
@@ -156,28 +166,39 @@ class PlantFruitDatabase:
         closest_old_marker_id = 50
         closest_old_marker_dist = 10
         
+        new_yellow_prob_sum = 0
         for i in range(0,len(self.yellow_fruit_arr_.markers)):
             old_marker = self.yellow_fruit_arr_.markers[i]
-            self.yellow_prob_mean = (self.yellow_prob_mean + old_marker.color.a)/2
-            if(old_marker.color.a > self.yellow_max_prob):
-                self.yellow_max_prob = old_marker.color.a
-            if(old_marker.color.a > self.yellow_2nd_max_prob and old_marker.color.a < self.yellow_max_prob):
-                self.yellow_2nd_max_prob = old_marker.color.a
-            if(old_marker.color.a > self.yellow_3rd_max_prob and old_marker.color.a < self.yellow_2nd_max_prob):
-                self.yellow_3rd_max_prob = old_marker.color.a
+            new_yellow_prob_sum = new_yellow_prob_sum + old_marker.color.a
+            # if(old_marker.color.a > self.yellow_max_prob):
+            #     self.yellow_max_prob = old_marker.color.a
+            # if(old_marker.color.a > self.yellow_2nd_max_prob and old_marker.color.a < self.yellow_max_prob):
+            #     self.yellow_2nd_max_prob = old_marker.color.a
+            # if(old_marker.color.a > self.yellow_3rd_max_prob and old_marker.color.a < self.yellow_2nd_max_prob):
+            #     self.yellow_3rd_max_prob = old_marker.color.a
             dist = calc_marker_dist(old_marker, marker)
             if (dist <= closest_old_marker_dist):
                 closest_old_marker_dist = dist
                 closest_old_marker_id = i
-            if(old_marker.color.a > max(0.3, (self.yellow_prob_mean/2))):
-                self.real_yellow_fruit_arr_.append(1)
-            elif(old_marker.color.a <= max(0.3, (self.yellow_prob_mean /5))):
-                half_count = half_count+0.2
-            # elif(old_marker.color.a <= max(0.2, (self.yellow_prob_mean /10))):
-            #     half_count = half_count+0.01
-            # elif(old_marker.color.a == 0.3):
-            #     print(f"real_yellow_fruit_arr_: {self.real_yellow_fruit_arr_}")
+
+            if(self.yellow_prob_mean < 1.7):
+                if(old_marker.color.a > (min(0.4, (self.yellow_prob_mean)*0.8))):
+                    self.real_yellow_fruit_arr_.append(1)
+                elif((min(0.4, (self.yellow_prob_mean)*0.8)) >= old_marker.color.a >= 0.3):
+                    half_count = half_count+0.5
+                elif(old_marker.color.a < 0.3):
+                    print(f"real_yellow_fruit_arr_: {self.real_yellow_fruit_arr_}")
+            else:
+                if(old_marker.color.a > (max(0.4, (self.yellow_prob_mean)*0.8))):
+                    self.real_yellow_fruit_arr_.append(1)
+                elif((max(0.4, (self.yellow_prob_mean)*0.8)) >= old_marker.color.a >= 0.3):
+                    half_count = half_count+0.5
+                elif(old_marker.color.a < 0.3):
+                    print(f"real_yellow_fruit_arr_: {self.real_yellow_fruit_arr_}")
+
         # endfor
+        new_yellow_prob_mean = new_yellow_prob_sum/(len(self.yellow_fruit_arr_.markers) + 0.3)
+        self.yellow_prob_mean = new_yellow_prob_mean
                 
         if(closest_old_marker_dist < self.yellow_dist):
             print("the closest fruit is the {closest_old_marker_id}th yellow with dist = {closest_old_marker_dist}")
@@ -200,7 +221,7 @@ class PlantFruitDatabase:
         if(this_id == 0):
             self.yellow_fruit_arr_.markers.append(marker)
         # new_yellow_id = len(self.yellow_fruit_arr_.markers)
-        self.yellow_fruit_count_pub.publish(len(self.real_yellow_fruit_arr_)+int(half_count/2))
+        self.yellow_fruit_count_pub.publish(len(self.real_yellow_fruit_arr_)+int(half_count))
         # print(f"new_yellow_id is: {new_yellow_id}")
         if(this_id > len(self.real_yellow_fruit_arr_) or this_id==0):
             this_id = len(self.real_yellow_fruit_arr_)
